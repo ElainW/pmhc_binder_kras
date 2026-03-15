@@ -12,7 +12,7 @@ init("-mute all")
 
 def calc_radius_of_gyration(pose):
     """Calculate radius of gyration for a pose."""
-    
+
     coords = []
     for i in range(1, pose.total_residue() + 1):
         residue = pose.residue(i)
@@ -20,7 +20,7 @@ def calc_radius_of_gyration(pose):
         if residue.has("CA"):
             ca = residue.xyz("CA")
             coords.append([ca.x, ca.y, ca.z])
-    
+
     coords = np.array(coords)
     centroid = coords.mean(axis=0)
     rg = np.sqrt(((coords - centroid) ** 2).sum(axis=1).mean())
@@ -34,7 +34,7 @@ def calc_radius_of_gyration_batch(
 ):
     """
     Calculate the radius of gyration of PDB backbones (will use this to figure out a good range to filter).
-    
+
     Args:
         input_dirs:  List of directories containing RFdiffusion output PDBs
         output_csv: CSV file to output the radius of gyration result for each pdb
@@ -42,7 +42,7 @@ def calc_radius_of_gyration_batch(
     """
     column_names = ['pdb_path', 'complex_Rg', 'binder_Rg']
     results = []
-    
+
     for input_dir in input_dirs:
         pdb_files = sorted(glob.glob(os.path.join(input_dir, pattern)))
         print(f"Found {len(pdb_files)} structures to calculate RG")
@@ -57,7 +57,7 @@ def calc_radius_of_gyration_batch(
 
             except Exception as e:
                 print(f"  Warning: failed to process {pdb_path}: {e}")
-    
+
     df = pd.DataFrame(results, columns=column_names)
     df.to_csv(output_csv, index=False)
 
@@ -71,14 +71,14 @@ def get_chain_pose(pose, chain="A"):
 
 def calc_rg_binder_only(pose, binder_chain="A"):
     binder_pose = get_chain_pose(pose, binder_chain)
-    
+
     coords = []
     for i in range(1, binder_pose.total_residue() + 1):
         residue = binder_pose.residue(i)
         if residue.has("CA"):
             ca = residue.xyz("CA")
             coords.append([ca.x, ca.y, ca.z])
-    
+
     coords = np.array(coords)
     centroid = coords.mean(axis=0)
     rg = np.sqrt(((coords - centroid) ** 2).sum(axis=1).mean())
@@ -93,7 +93,7 @@ def filter_backbones_by_rg(
 ):
     """
     Filter PDB backbones by radius of gyration.
-    
+
     Args:
         input_dir:  Directory containing RFdiffusion output PDBs
         output_dir: Directory to copy passing structures
@@ -112,15 +112,15 @@ def filter_backbones_by_rg(
         try:
             pose = pose_from_pdb(pdb_path)
             rg = calc_radius_of_gyration(pose)
-            
+
             passes = True
             if rg_min is not None and rg < rg_min:
                 passes = False
             if rg_max is not None and rg > rg_max:
                 passes = False
-            
+
             results.append((pdb_path, rg, passes))
-            
+
             if passes:
                 passed += 1
                 out_path = os.path.join(output_dir, os.path.basename(pdb_path))
@@ -142,7 +142,7 @@ def filter_backbones_by_rg(
         for path, rg, passes in results:
             f.write(f"{os.path.basename(path)},{rg:.3f},{passes}\n")
     print(f"Log written to {log_path}")
-    
+
     return results
 
 
