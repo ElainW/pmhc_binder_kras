@@ -1,7 +1,0 @@
-- inference.output_prefix=../outputs/kras/300_2/
-- inference.input_pdb=../input_pdbs/9UV8.pdb
-- contigmap.contigs=[A3-180/0 C1-9/0 50-100]
-- ppi.hotspot_res=[C6,C7]
-- inference.num_designs=300
-- denoiser.noise_scale_ca=0
-- denoiser.noise_scale_frame=0
