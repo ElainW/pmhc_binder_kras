@@ -1,0 +1,40 @@
+#!/bin/bash
+#SBATCH -p gpu
+#SBATCH --mem=32g
+#SBATCH --gres=gpu:rtx2080:1
+#SBATCH -c 3
+#SBATCH --output=../slurm/kras.out
+
+# source activate mlfold
+#PYTHON=/n/groups/marks/software/anaconda_o2/envs/proteingym_env/bin/python
+PYTHON="/n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python"
+PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
+folder_with_pdbs="../../rfdiffusion/outputs/kras/100"
+input_dir="../input/kras"
+output_dir="../outputs/kras"
+
+mkdir -p $input_dir
+mkdir -p $input_dir
+
+path_for_parsed_chains=$input_dir"/parsed_pdbs.jsonl"
+path_for_assigned_chains=$input_dir"/assigned_pdbs.jsonl"
+path_for_fixed_positions=$input_dir"/fixed_pdbs.jsonl"
+chains_to_design="A"
+#The first amino acid in the chain corresponds to 1 and not PDB residues index for now.
+fixed_positions="" #fixing chain B, design chain A
+
+${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
+
+${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/helper_scripts/assign_fixed_chains.py --input_path=$path_for_parsed_chains --output_path=$path_for_assigned_chains --chain_list "$chains_to_design"
+
+${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/helper_scripts/make_fixed_positions_dict.py --input_path=$path_for_parsed_chains --output_path=$path_for_fixed_positions --chain_list 'A' --position_list "$fixed_positions"
+
+${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/protein_mpnn_run.py \
+        --jsonl_path $path_for_parsed_chains \
+        --chain_id_jsonl $path_for_assigned_chains \
+        --fixed_positions_jsonl $path_for_fixed_positions \
+        --out_folder $output_dir \
+        --num_seq_per_target 32 \
+        --sampling_temp "0.1" \
+        --seed 37 \
+        --batch_size 1

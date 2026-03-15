@@ -1,0 +1,12 @@
+alphafold/
+alphafold2/outputs/
+envs/
+pMHCI_binder_design/
+proteinmpnn/outputs/
+proteinmpnn/test/
+rfdiffusion/outputs/
+rfdiffusion/slurm/
+silent_tools/
+rfdiffusion/scripts/outputs/
+rfdiffusion/scripts/.ipynb_checkpoints/
+proteinmpnn/scripts/.ipynb_checkpoints/
