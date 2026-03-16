@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from pyrosetta import init, pose_from_pdb
 from pyrosetta.rosetta.core.pose import Pose
+from pyrosetta.rosetta.protocols.moves import DsspMover
 
 init("-mute all")
 
@@ -47,6 +48,76 @@ def inspect_chains_detailed(pdb_path):
         print(f"  Chain {chain_letter}: residues {start}-{end} "
               f"({n_res} res) [{first_res}...{last_res}]")
 
+# secondary structure filter: remove single alpha helices
+def calc_helix_segments(pose, binder_chain="A"):
+    """
+    Run DSSP on the binder chain and count the number of distinct
+    helix segments.
+
+    Returns:
+        ss_string:      full DSSP secondary structure string for the binder
+        n_helix_segs:   number of distinct helix segments (H-runs)
+        helix_fraction: fraction of binder residues in helix
+    """
+    # run DSSP on the full pose — it annotates per-residue SS in place
+    dssp = DsspMover()
+    dssp.apply(pose)
+
+    binder_pose = get_chain_pose(pose, binder_chain)
+    ss_string   = binder_pose.secstruct()   # e.g. "HHHHHLLLLHHHHHH"
+
+    # count distinct helix runs (transitions into H)
+    n_helix_segs   = sum(
+        1 for i, c in enumerate(ss_string)
+        if c == 'H' and (i == 0 or ss_string[i - 1] != 'H')
+    )
+    helix_fraction = ss_string.count('H') / len(ss_string) if ss_string else 0.0
+
+    return ss_string, n_helix_segs, helix_fraction
+
+
+def check_helix_segments(pose, binder_chain="A",
+                          min_helix_segs=2,
+                          min_helix_length=4):
+    """
+    Filter out backbones with too few helix segments or where individual
+    helices are too short to be meaningful.
+
+    Args:
+        min_helix_segs:   minimum number of distinct helix segments (default: 2)
+                          — set to 2 to eliminate single-helix backbones,
+                            set to 3 if you specifically want 3-helix bundles
+        min_helix_length: minimum number of consecutive H residues to count
+                          as a real helix, not a frayed cap (default: 4)
+
+    Returns:
+        result dict with ss_string, n_helix_segs, helix_fraction, passes
+    """
+    ss_string, _, helix_fraction = calc_helix_segments(pose, binder_chain)
+
+    # recount with minimum length requirement
+    segments  = []
+    count     = 0
+    for c in ss_string:
+        if c == 'H':
+            count += 1
+        else:
+            if count >= min_helix_length:
+                segments.append(count)
+            count = 0
+    if count >= min_helix_length:
+        segments.append(count)
+
+    n_helix_segs = len(segments)
+    passes       = n_helix_segs >= min_helix_segs
+
+    return {
+        "ss_string":      ss_string,
+        "n_helix_segs":   n_helix_segs,
+        "helix_lengths":  segments,       # e.g. [12, 8, 15] for 3-helix bundle
+        "helix_fraction": round(helix_fraction, 3),
+        "passes_helix":   passes,
+    }
 
 # ── Orientation filters ───────────────────────────────────────────────────────
 
@@ -150,7 +221,7 @@ def check_binder_orientation(pose,
 
 # ── Main filter loop ──────────────────────────────────────────────────────────
 
-def filter_orientation(
+def filter_orientation_structure(
     input_dirs,
     output_dir,
     binder_chain="A",
@@ -158,6 +229,8 @@ def filter_orientation(
     mhc_chain="B",
     max_angle=60.0,
     max_lateral_dist=20.0,
+    min_helix_segs=2,
+    min_helix_length=4,
     pattern="*.pdb",
 ):
     """
@@ -174,6 +247,11 @@ def filter_orientation(
         mhc_chain:             Chain letter of the MHC (default: B)
         max_angle:             Max angle in ° between binder and peptide axes
         max_lateral_dist:      Max lateral COM displacement in Å from peptide
+        min_helix_segs:   minimum number of distinct helix segments (default: 2)
+                          — set to 2 to eliminate single-helix backbones,
+                            set to 3 if you specifically want 3-helix bundles
+        min_helix_length: minimum number of consecutive H residues to count
+                          as a real helix, not a frayed cap (default: 4)
         pattern:               Glob pattern for PDB files
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -195,15 +273,21 @@ def filter_orientation(
                     max_angle             = max_angle,
                     max_lateral_dist      = max_lateral_dist,
                 )
+                helix_result              = check_helix_segments(pose,
+                                                                 binder_chain,
+                                                                 min_helix_segs,
+                                                                 min_helix_length)
 
                 result = {
                     "filename_old": pdb_path,
                     "filename_new": "NA",
+                    "n_helix_segs": helix_result["n_helix_segs"],
+                    "passes_helix": helix_result["passes_helix"],
                     **orient,
                 }
                 results.append(result)
 
-                if orient["passes_orientation"]:
+                if orient["passes_orientation"] and helix_result["passes_helix"]:
                     filename_new = os.path.join(output_dir, f"kras_orient_{passed}.pdb")
                     pose.dump_pdb(filename_new)
                     passed += 1
@@ -215,11 +299,12 @@ def filter_orientation(
     # summary
     if results:
         df = pd.DataFrame(results)
-        metric_cols = ["orientation_angle", "lateral_dist", "vertical_dist"]
+        metric_cols = ["orientation_angle", "lateral_dist", "vertical_dist", "n_helix_segs"]
 
         print(f"\nResults: {passed}/{len(results)} structures passed orientation filters")
         print(f"  Failed angle:             {sum(not r['passes_angle']    for r in results)}")
         print(f"  Failed lateral dist:      {sum(not r['passes_lateral']  for r in results)}")
+        print(f"  Failed 2nd structure:      {sum(not r['passes_helix']  for r in results)}")
         print("\nMetric statistics:")
         print(df[metric_cols].describe(percentiles=[0.25, 0.5, 0.75]).round(3).to_string())
     else:
@@ -288,18 +373,34 @@ def parse_args():
         help="Chain letter of the MHC (default: B)."
     )
 
+    # secondary structure filter parameters
+    parser.add_argument(
+    "--min_helix_segs",
+    type=int,
+    default=2,
+    help="Minimum number of distinct helix segments in the binder (default: 2). "
+         "Set to 3 to require 3-helix bundles specifically."
+    )
+    parser.add_argument(
+        "--min_helix_length",
+        type=int,
+        default=4,
+        help="Minimum consecutive helix residues to count as a real helix (default: 4). "
+             "Filters out frayed helix caps annotated by DSSP."
+    )
+
     # orientation filter thresholds
     parser.add_argument(
         "--max_angle",
         type=float,
-        default=60.0,
+        default=35.0,
         help="Maximum angle in degrees between binder and peptide principal "
              "axes (default: 60). Increase to be more permissive."
     )
     parser.add_argument(
         "--max_lateral_dist",
         type=float,
-        default=20.0,
+        default=15.0,
         help="Maximum lateral displacement in Å of binder COM from peptide "
              "COM (default: 20). Increase to be more permissive."
     )
@@ -337,7 +438,7 @@ if __name__ == "__main__":
             "Tip: run with --inspect <pdb_path> first to confirm chain letters."
         )
 
-    filter_orientation(
+    filter_orientation_structure(
         input_dirs           = args.input_dirs,
         output_dir           = args.output_dir,
         binder_chain         = args.binder_chain,
@@ -345,5 +446,7 @@ if __name__ == "__main__":
         mhc_chain            = args.mhc_chain,
         max_angle            = args.max_angle,
         max_lateral_dist     = args.max_lateral_dist,
+        min_helix_segs       = args.min_helix_segs,
+        min_helix_length     = args.min_helix_length,
         pattern              = args.pattern,
     )
