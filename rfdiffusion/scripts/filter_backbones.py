@@ -4,62 +4,10 @@ import pandas as pd
 import numpy as np
 import argparse
 from pyrosetta import init, pose_from_pdb
-from pyrosetta.rosetta.core.pose import Pose
+from pyrosetta.rosetta.core.pose import Pose, append_pose_to_pose
 
 # Initialize PyRosetta (silent mode to reduce output)
 init("-mute all")
-
-# relabel peptide chain from appended to mhc (chain B) to chain C
-def relabel_peptide_chain(pose, peptide_start, peptide_end,
-                          target_chain="B", new_chain="C"):
-    """
-    Split a residue range out of one chain into a new chain.
-
-    Args:
-        pose:          PyRosetta pose
-        peptide_start: 1-based start position of peptide within target_chain
-        peptide_end:   1-based end position of peptide within target_chain
-        target_chain:  Chain letter containing the MHC + peptide (default "B")
-        new_chain:     Chain letter to assign to the peptide residues (default "C")
-
-    Returns:
-        new_pose: Pose with peptide residues relabeled as new_chain
-
-    Notes:
-        - peptide_start and peptide_end are positions WITHIN target_chain,
-          not absolute pose residue numbers. So if the peptide is residues
-          181-189 of chain B, pass peptide_start=181, peptide_end=189.
-        - Run inspect_chains() first to confirm the residue range of your
-          peptide within chain B.
-    """
-
-    # get absolute residue numbers in the full pose
-    chain_id = ord(target_chain) - ord('A') + 1
-    chain_start = pose.chain_begin(chain_id)
-
-    abs_pep_start = chain_start + peptide_start - 1
-    abs_pep_end   = chain_start + peptide_end   - 1
-
-    # validate range
-    chain_end = pose.chain_end(chain_id)
-    if abs_pep_start < chain_start or abs_pep_end > chain_end:
-        raise ValueError(
-            f"Peptide range {peptide_start}-{peptide_end} is out of bounds "
-            f"for chain {target_chain} "
-            f"(chain has {chain_end - chain_start + 1} residues)"
-        )
-
-    # relabel the peptide residues to new chain letter
-    new_pose = pose.clone()
-    new_chain_id = ord(new_chain) - ord('A') + 1
-    pdb_info = new_pose.pdb_info()
-
-    for res_idx in range(abs_pep_start, abs_pep_end + 1):
-        pdb_info.chain(res_idx, new_chain)
-
-    new_pose.pdb_info(pdb_info)
-    return new_pose
-
 
 def inspect_chains_detailed(pdb_path):
     """
@@ -79,6 +27,77 @@ def inspect_chains_detailed(pdb_path):
         last_res  = pose.residue(end).name3()
         print(f"  Chain {chain_letter}: residues {start}-{end} "
               f"({n_res} res) [{first_res}...{last_res}]")
+
+# relabel peptide chain from appended to mhc (chain B) to chain C
+def relabel_peptide_chain(pose, peptide_start, peptide_end,
+                          target_chain="B", new_chain="C"):
+    """
+    Extracts peptide residues into a separate chain using pose slicing.
+    Uses conformation-safe splitting via pdb_info + renaming after
+    physically separating the peptide into its own subpose.
+    """
+    chain_id    = ord(target_chain) - ord('A') + 1
+    chain_start = pose.chain_begin(chain_id)
+    chain_end   = pose.chain_end(chain_id)
+
+    abs_pep_start = chain_start + peptide_start - 1
+    abs_pep_end   = chain_start + peptide_end   - 1
+
+    if abs_pep_start < chain_start or abs_pep_end > chain_end:
+        raise ValueError(
+            f"Peptide range {peptide_start}-{peptide_end} is out of bounds "
+            f"for chain {target_chain} "
+            f"(chain has {chain_end - chain_start + 1} residues)"
+        )
+
+    # clone pose and extract peptide as its own subpose
+    mhc_pose     = pose.clone()
+    peptide_pose = Pose()
+
+    # extract peptide residues into peptide_pose
+    for i, res_idx in enumerate(range(abs_pep_start, abs_pep_end + 1)):
+        if i == 0:
+            peptide_pose.append_residue_by_jump(
+                mhc_pose.residue(res_idx).clone(), 1
+            )
+        else:
+            peptide_pose.append_residue_by_bond(
+                mhc_pose.residue(res_idx).clone()
+            )
+
+    # delete peptide residues from mhc_pose (delete in reverse to preserve indices)
+    for res_idx in range(abs_pep_end, abs_pep_start - 1, -1):
+        mhc_pose.delete_residue_range_slow(res_idx, res_idx)
+
+    # rejoin: mhc_pose (now without peptide) + peptide_pose as new chain
+    append_pose_to_pose(mhc_pose, peptide_pose, new_chain=True)
+
+    # now relabel chain letters to match expected A, B, C layout
+    pdb_info = mhc_pose.pdb_info()
+    for res_idx in range(1, mhc_pose.total_residue() + 1):
+        chain_num    = mhc_pose.chain(res_idx)
+        chain_letter = chr(ord('A') + chain_num - 1)
+        pdb_info.chain(res_idx, chain_letter)
+    mhc_pose.pdb_info(pdb_info)
+
+    return mhc_pose
+
+
+def verify_relabeling(pdb_path, peptide_start, peptide_end):
+    """Quick sanity check — print chains before and after relabeling."""
+    pose = pose_from_pdb(pdb_path)
+
+    print("BEFORE:")
+    inspect_chains_detailed(pdb_path)
+
+    relabeled = relabel_peptide_chain(pose, peptide_start, peptide_end)
+
+    print("\nAFTER:")
+    for chain_idx in range(1, relabeled.num_chains() + 1):
+        chain_letter = chr(ord('A') + chain_idx - 1)
+        start  = relabeled.chain_begin(chain_idx)
+        end    = relabeled.chain_end(chain_idx)
+        print(f"  Chain {chain_letter}: {end - start + 1} residues")
 
 
 # shared utils
@@ -463,6 +482,7 @@ if __name__ == "__main__":
     # inspect mode — run and exit without filtering
     if args.inspect:
         inspect_chains_detailed(args.inspect)
+        verify_relabeling(args.inspect, peptide_start=args.peptide_start, peptide_end=args.peptide_end)
         exit(0)
 
     # validate required args for filter mode
