@@ -2,6 +2,8 @@
 module load conda/miniforge3/24.11.3-0
 conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
 
+cd /n/groups/marks/users/aaron/pmhc/rfdiffusion/scripts/
+
 # # inspect a single PDB first to find peptide range
 # python filter_backbones.py --inspect /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/100/_0.pdb \
 #                            --peptide_start 179 \
