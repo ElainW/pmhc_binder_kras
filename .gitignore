@@ -10,3 +10,14 @@ silent_tools/
 rfdiffusion/scripts/outputs/
 rfdiffusion/scripts/.ipynb_checkpoints/
 proteinmpnn/scripts/.ipynb_checkpoints/
+
+proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
+rfdiffusion/scripts/backbone_clusters.csv
+rfdiffusion/scripts/clustering_summary_by_bin.png
+rfdiffusion/scripts/peptide_sasa_distribution.png
+rfdiffusion/scripts/peptide_sasa_scores.csv
+rfdiffusion/scripts/representatives.txt
+rfdiffusion/scripts/rmsd_matrix_bin_50-64.npy
+rfdiffusion/scripts/rmsd_matrix_bin_65-79.npy
+rfdiffusion/scripts/rmsd_matrix_bin_80-94.npy
+rfdiffusion/scripts/rmsd_matrix_bin_95-109.npy
