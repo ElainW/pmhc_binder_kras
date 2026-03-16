@@ -59,10 +59,6 @@ def calc_helix_segments(pose, binder_chain="A"):
         n_helix_segs:   number of distinct helix segments (H-runs)
         helix_fraction: fraction of binder residues in helix
     """
-    # run DSSP on the full pose — it annotates per-residue SS in place
-    dssp = DsspMover()
-    dssp.apply(pose)
-
     binder_pose = get_chain_pose(pose, binder_chain)
     ss_string   = binder_pose.secstruct()   # e.g. "HHHHHLLLLHHHHHH"
 
@@ -265,6 +261,26 @@ def filter_orientation_structure(
         for pdb_path in pdb_files:
             try:
                 pose   = pose_from_pdb(pdb_path)
+                DsspMover().apply(pose)
+
+                result = {
+                    "filename_old": pdb_path,
+                    "filename_new": "NA",
+                }
+
+
+                helix_result              = check_helix_segments(pose,
+                                                                 binder_chain,
+                                                                 min_helix_segs,
+                                                                 min_helix_length)
+                result.update({
+                    "n_helix_segs":   helix_result["n_helix_segs"],
+                })
+                if not helix_result["passes_helix"]:
+                    result["passes_all"] = False
+                    results.append(result)
+                    continue
+
                 orient = check_binder_orientation(
                     pose,
                     binder_chain          = binder_chain,
@@ -273,21 +289,11 @@ def filter_orientation_structure(
                     max_angle             = max_angle,
                     max_lateral_dist      = max_lateral_dist,
                 )
-                helix_result              = check_helix_segments(pose,
-                                                                 binder_chain,
-                                                                 min_helix_segs,
-                                                                 min_helix_length)
 
-                result = {
-                    "filename_old": pdb_path,
-                    "filename_new": "NA",
-                    "n_helix_segs": helix_result["n_helix_segs"],
-                    "passes_helix": helix_result["passes_helix"],
-                    **orient,
-                }
+                result.update(orient)
                 results.append(result)
 
-                if orient["passes_orientation"] and helix_result["passes_helix"]:
+                if orient["passes_orientation"]:
                     filename_new = os.path.join(output_dir, f"kras_orient_{passed}.pdb")
                     pose.dump_pdb(filename_new)
                     passed += 1
@@ -302,9 +308,8 @@ def filter_orientation_structure(
         metric_cols = ["orientation_angle", "lateral_dist", "vertical_dist", "n_helix_segs"]
 
         print(f"\nResults: {passed}/{len(results)} structures passed orientation filters")
-        print(f"  Failed angle:             {sum(not r['passes_angle']    for r in results)}")
-        print(f"  Failed lateral dist:      {sum(not r['passes_lateral']  for r in results)}")
-        print(f"  Failed 2nd structure:      {sum(not r['passes_helix']  for r in results)}")
+#         print(f"  Failed angle:             {sum(not r['passes_angle']    for r in results)}")
+#         print(f"  Failed lateral dist:      {sum(not r['passes_lateral']  for r in results)}")
         print("\nMetric statistics:")
         print(df[metric_cols].describe(percentiles=[0.25, 0.5, 0.75]).round(3).to_string())
     else:
