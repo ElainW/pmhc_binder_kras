@@ -115,41 +115,12 @@ def calc_binder_com_displacement(pose, binder_chain="A", peptide_chain="C",
     return lateral_dist, vertical_dist
 
 
-def calc_peptide_vs_mhc_proximity(pose, binder_chain="A",
-                                   peptide_chain="C", mhc_chain="B"):
-    """
-    For each binder residue, determine whether it is closer to the
-    peptide or to the MHC. A well-docked binder should have a
-    substantial fraction of residues closer to the peptide.
-
-    Returns:
-        peptide_fraction (float): fraction of binder residues whose
-                                  nearest neighbour is on the peptide
-                                  rather than the MHC.
-    """
-    binder_coords  = get_ca_coords_by_letter(pose, binder_chain)
-    peptide_coords = get_ca_coords_by_letter(pose, peptide_chain)
-    mhc_coords     = get_ca_coords_by_letter(pose, mhc_chain)
-
-    dist_to_peptide = np.linalg.norm(
-        binder_coords[:, None, :] - peptide_coords[None, :, :], axis=-1
-    ).min(axis=1)
-
-    dist_to_mhc = np.linalg.norm(
-        binder_coords[:, None, :] - mhc_coords[None, :, :], axis=-1
-    ).min(axis=1)
-
-    peptide_fraction = (dist_to_peptide < dist_to_mhc).sum() / len(binder_coords)
-    return float(peptide_fraction)
-
-
 def check_binder_orientation(pose,
                               binder_chain="A",
                               peptide_chain="C",
                               mhc_chain="B",
                               max_angle=60.0,
-                              max_lateral_dist=20.0,
-                              min_peptide_fraction=0.3):
+                              max_lateral_dist=20.0):
     """
     Combined orientation filter. Runs all three checks and returns a
     results dict with individual metrics and pass/fail flags.
@@ -159,26 +130,20 @@ def check_binder_orientation(pose,
                                peptide principal axes (default: 60)
         max_lateral_dist:      Maximum allowed lateral COM displacement in Å
                                from peptide COM (default: 20)
-        min_peptide_fraction:  Minimum fraction of binder residues that must
-                               be closer to peptide than MHC (default: 0.3)
     """
     angle                       = calc_orientation_angle(pose, binder_chain, peptide_chain)
     lateral_dist, vertical_dist = calc_binder_com_displacement(pose, binder_chain, peptide_chain, mhc_chain)
-    peptide_fraction            = calc_peptide_vs_mhc_proximity(pose, binder_chain, peptide_chain, mhc_chain)
 
     passes_angle    = angle          <  max_angle
     passes_lateral  = lateral_dist   <  max_lateral_dist
-    passes_fraction = peptide_fraction >= min_peptide_fraction
-    passes_all      = passes_angle and passes_lateral and passes_fraction
+    passes_all      = passes_angle and passes_lateral
 
     return {
         "orientation_angle":  round(angle, 2),
         "lateral_dist":       round(lateral_dist, 2),
         "vertical_dist":      round(vertical_dist, 2),
-        "peptide_fraction":   round(peptide_fraction, 3),
         "passes_angle":       passes_angle,
         "passes_lateral":     passes_lateral,
-        "passes_fraction":    passes_fraction,
         "passes_orientation": passes_all,
     }
 
@@ -193,7 +158,6 @@ def filter_orientation(
     mhc_chain="B",
     max_angle=60.0,
     max_lateral_dist=20.0,
-    min_peptide_fraction=0.3,
     pattern="*.pdb",
 ):
     """
@@ -210,7 +174,6 @@ def filter_orientation(
         mhc_chain:             Chain letter of the MHC (default: B)
         max_angle:             Max angle in ° between binder and peptide axes
         max_lateral_dist:      Max lateral COM displacement in Å from peptide
-        min_peptide_fraction:  Min fraction of binder residues closer to peptide
         pattern:               Glob pattern for PDB files
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -231,7 +194,6 @@ def filter_orientation(
                     mhc_chain             = mhc_chain,
                     max_angle             = max_angle,
                     max_lateral_dist      = max_lateral_dist,
-                    min_peptide_fraction  = min_peptide_fraction,
                 )
 
                 result = {
@@ -253,12 +215,11 @@ def filter_orientation(
     # summary
     if results:
         df = pd.DataFrame(results)
-        metric_cols = ["orientation_angle", "lateral_dist", "vertical_dist", "peptide_fraction"]
+        metric_cols = ["orientation_angle", "lateral_dist", "vertical_dist"]
 
         print(f"\nResults: {passed}/{len(results)} structures passed orientation filters")
         print(f"  Failed angle:             {sum(not r['passes_angle']    for r in results)}")
         print(f"  Failed lateral dist:      {sum(not r['passes_lateral']  for r in results)}")
-        print(f"  Failed peptide fraction:  {sum(not r['passes_fraction'] for r in results)}")
         print("\nMetric statistics:")
         print(df[metric_cols].describe(percentiles=[0.25, 0.5, 0.75]).round(3).to_string())
     else:
@@ -342,14 +303,6 @@ def parse_args():
         help="Maximum lateral displacement in Å of binder COM from peptide "
              "COM (default: 20). Increase to be more permissive."
     )
-    parser.add_argument(
-        "--min_peptide_fraction",
-        type=float,
-        default=0.3,
-        help="Minimum fraction of binder residues that must be closer to the "
-             "peptide than to the MHC (default: 0.3). Inspect distribution "
-             "before setting a hard cutoff."
-    )
 
     # glob pattern
     parser.add_argument(
@@ -392,6 +345,5 @@ if __name__ == "__main__":
         mhc_chain            = args.mhc_chain,
         max_angle            = args.max_angle,
         max_lateral_dist     = args.max_lateral_dist,
-        min_peptide_fraction = args.min_peptide_fraction,
         pattern              = args.pattern,
     )
