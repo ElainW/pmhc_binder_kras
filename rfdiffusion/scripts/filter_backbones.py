@@ -432,7 +432,7 @@ def parse_args():
     parser.add_argument(
         "--expected_min",
         type=int,
-        default=60,
+        default=50,
         help="Minimum number of binder residues (default: 60)."
     )
     parser.add_argument(
