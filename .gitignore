@@ -2,6 +2,7 @@ alphafold/
 alphafold2/outputs/
 envs/
 pMHCI_binder_design/
+dl_binder_design/
 proteinmpnn/outputs/
 proteinmpnn/test/
 rfdiffusion/outputs/
