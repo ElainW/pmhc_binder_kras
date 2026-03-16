@@ -9,7 +9,7 @@
 #PYTHON=/n/groups/marks/software/anaconda_o2/envs/proteingym_env/bin/python
 PYTHON="/n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-folder_with_pdbs="../../rfdiffusion/outputs/kras/100"
+folder_with_pdbs="/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered/rep/"
 input_dir="../input/kras"
 output_dir="../outputs/kras"
 
@@ -21,7 +21,7 @@ path_for_assigned_chains=$input_dir"/assigned_pdbs.jsonl"
 path_for_fixed_positions=$input_dir"/fixed_pdbs.jsonl"
 chains_to_design="A"
 #The first amino acid in the chain corresponds to 1 and not PDB residues index for now.
-fixed_positions="" #fixing chain B, design chain A
+fixed_positions="" #fixing chain B and C, design chain A
 
 ${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/helper_scripts/parse_multiple_chains.py --input_path=$folder_with_pdbs --output_path=$path_for_parsed_chains
 
@@ -34,7 +34,7 @@ ${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/protein_mpnn_run.py \
         --chain_id_jsonl $path_for_assigned_chains \
         --fixed_positions_jsonl $path_for_fixed_positions \
         --out_folder $output_dir \
-        --num_seq_per_target 32 \
+        --num_seq_per_target 8 \
         --sampling_temp "0.1" \
         --seed 37 \
         --batch_size 1
