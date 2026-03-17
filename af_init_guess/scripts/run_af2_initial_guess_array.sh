@@ -21,7 +21,7 @@ module load conda/miniforge3/24.11.3-0
 conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design
 
 # --- CUDA library paths (self-contained in conda env) ---
-export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:$LD_LIBRARY_PATH
 
 # --- Confirm GPU visible before running ---
 python -c "
