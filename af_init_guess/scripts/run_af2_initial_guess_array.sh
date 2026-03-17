@@ -2,7 +2,7 @@
 #SBATCH -J af2_ig_kras
 #SBATCH -p gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH -t 01:30:00
+#SBATCH -t 00:45:00
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --mem=32G
 #SBATCH -c 4
@@ -22,9 +22,6 @@ conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_init_guess
 
 # --- CUDA library paths (self-contained in conda env) ---
 export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib/python3.11/site-packages/nvidia/cusolver/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
-
-# to remove
-SLURM_ARRAY_TASK_ID=0
 
 # --- Confirm GPU visible before running ---
 python -c "
