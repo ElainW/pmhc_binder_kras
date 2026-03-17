@@ -1,0 +1,21 @@
+name: af2_init_guess
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python==3.11
+  - biopython
+  - ml-collections
+  - numpy==1.26.4        # ← added: pin numpy to 1.x
+  - tensorflow
+  - pip
+  - mock
+  - pip:
+    - --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+    - jax[cuda12_pip]==0.4.20
+    - jaxlib==0.4.20+cuda12.cudnn89    # ← pinned: was unpinned
+    - ml_dtypes==0.3.2                 # ← pinned: must match jax 0.4.20
+    - dm-haiku==0.0.12                 # ← pinned: compatible with jax 0.4.20
+    - dm-tree==0.1.8
