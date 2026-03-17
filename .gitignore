@@ -1,6 +1,5 @@
 alphafold/
 alphafold2/outputs/
-envs/
 pMHCI_binder_design/
 dl_binder_design/
 proteinmpnn/outputs/
@@ -18,6 +17,8 @@ af_init_guess/logs/
 af_init_guess/scripts/tmp_*.silent
 af_init_guess/scripts/tmp_*.silent.idx
 af_init_guess/scripts/tmp_*.list
+af_init_guess/scripts/check.point
+envs/af2_init_guess/
 
 proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
 rfdiffusion/scripts/backbone_clusters.csv
