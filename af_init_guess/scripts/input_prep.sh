@@ -10,3 +10,8 @@ python thread_fasta_to_backbones.py \
     --verbose
 
 /n/groups/marks/users/aaron/pmhc/silent_tools/silentfrompdbs /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_pdbs/*.pdb > /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_kras_designs.silent
+
+python split_silent.py \
+    --silent ../inputs/threaded_kras_designs.silent \
+    --output_dir ../inputs/kras_chunks/ \
+    --chunk_size 50
