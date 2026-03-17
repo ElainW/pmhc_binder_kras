@@ -12,6 +12,8 @@ rfdiffusion/scripts/outputs/
 rfdiffusion/scripts/.ipynb_checkpoints/
 proteinmpnn/scripts/.ipynb_checkpoints/
 proteinmpnn/input/kras/*.jsonl
+af_init_guess/inputs/
+af_init_guess/outputs/
 
 proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
 rfdiffusion/scripts/backbone_clusters.csv
