@@ -4,7 +4,7 @@
 #SBATCH --qos=gpuquad_qos
 #SBATCH -t 00:45:00
 #SBATCH --gres=gpu:l40s:1
-#SBATCH --mem=32G
+#SBATCH --mem=6G
 #SBATCH -c 4
 #SBATCH -o /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.log
 #SBATCH -e /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.err
