@@ -5,12 +5,11 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - python=3.11
+  - python==3.11
   - biopython==1.79
   - ml-collections==0.1.1
   - tensorflow
   - pip
-  #- pyrosetta use a symbolic link to dl_binder_design
   - mock
   - pip:
     - --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
@@ -19,3 +18,4 @@ dependencies:
     - dm-haiku==0.0.16
     - dm-tree==0.1.9
     - nvidia-cudnn-cu12==8.9.7.29
+    - biopython==1.79
