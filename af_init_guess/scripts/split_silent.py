@@ -100,4 +100,4 @@ if __name__ == '__main__':
     args = parse_args()
     n_chunks = split_silent(args.silent, args.output_dir, args.chunk_size)
     print(f"\nTo submit as SLURM array job:")
-    print(f"  sbatch --array=0-{n_chunks-1} run_af2_initial_guess.sh")
+    print(f"  sbatch --array=0-{n_chunks-1} run_af2_initial_guess_array.sh")
