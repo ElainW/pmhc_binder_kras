@@ -11,6 +11,7 @@ silent_tools/
 rfdiffusion/scripts/outputs/
 rfdiffusion/scripts/.ipynb_checkpoints/
 proteinmpnn/scripts/.ipynb_checkpoints/
+proteinmpnn/input/kras/*.jsonl
 
 proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
 rfdiffusion/scripts/backbone_clusters.csv
