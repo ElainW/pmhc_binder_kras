@@ -18,7 +18,29 @@
 
 # --- Environment ---
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_init_guess
+
+# --- CUDA library paths (self-contained in conda env) ---
+export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib/python3.11/site-packages/nvidia/cusolver/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_init_guess/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+
+# to remove
+SLURM_ARRAY_TASK_ID=0
+
+# --- Confirm GPU visible before running ---
+python -c "
+import jax
+devices = jax.devices()
+print('JAX devices:', devices)
+if not any('cuda' in str(d).lower() for d in devices):
+    import sys
+    print('ERROR: No GPU detected — aborting')
+    sys.exit(1)
+"
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: GPU not visible to JAX — check CUDA/cuDNN setup"
+    exit 1
+fi
 
 # --- Paths ---
 DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
@@ -56,7 +78,7 @@ echo "======================================================"
 python ${DL_BINDER_DESIGN_DIR}/af2_initial_guess/predict.py \
     -silent ${SILENT_IN} \
     -outsilent ${SILENT_OUT} \
-    -scorefilepath ${SCOREFILEPATH}
+    -scorefilename ${SCOREFILEPATH}
 
 EXIT_CODE=$?
 
