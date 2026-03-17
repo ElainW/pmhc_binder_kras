@@ -19,6 +19,7 @@ af_init_guess/scripts/tmp_*.silent.idx
 af_init_guess/scripts/tmp_*.list
 af_init_guess/scripts/check.point
 envs/af2_init_guess/
+envs/af2_binder_design/
 
 proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
 rfdiffusion/scripts/backbone_clusters.csv
