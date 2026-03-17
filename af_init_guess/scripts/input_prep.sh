@@ -9,7 +9,11 @@ python thread_fasta_to_backbones.py \
     --verify \
     --verbose
 
-/n/groups/marks/users/aaron/pmhc/silent_tools/silentfrompdbs /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_pdbs/*.pdb > /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_kras_designs.silent
+python merge_chains_bc.py \
+    --input_dir ../inputs/threaded_pdbs/ \
+    --output_dir ../inputs/threaded_pdbs_merged/
+
+/n/groups/marks/users/aaron/pmhc/silent_tools/silentfrompdbs /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_pdbs_merged/*.pdb > /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_kras_designs.silent
 
 python split_silent.py \
     --silent ../inputs/threaded_kras_designs.silent \
