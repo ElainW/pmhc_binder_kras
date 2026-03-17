@@ -19,3 +19,7 @@ python split_silent.py \
     --silent ../inputs/threaded_kras_designs.silent \
     --output_dir ../inputs/kras_chunks/ \
     --chunk_size 50
+
+# Verify chunks have 2 chains
+grep "RES_NUM" \
+    /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/kras_chunks/chunk_0.silent | head -3
