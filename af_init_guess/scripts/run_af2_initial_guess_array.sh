@@ -1,0 +1,79 @@
+#!/bin/bash
+#SBATCH -J af2_ig_kras
+#SBATCH -p gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
+#SBATCH -t 01:30:00
+#SBATCH --gres=gpu:l40s:1
+#SBATCH --mem=32G
+#SBATCH -c 4
+#SBATCH -o /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.log
+#SBATCH -e /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.err
+
+# -------------------------------------------------------
+# AF2 Initial Guess — SLURM array job (KRAS)
+# Submit with:
+#   sbatch --array=0-N run_af2_initial_guess_array.sh
+# where N = (total_chunks - 1) printed by split_silent.py
+# -------------------------------------------------------
+
+# --- Environment ---
+module load conda/miniforge3/24.11.3-0
+conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+
+# --- Paths ---
+DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
+CHUNK_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/kras_chunks"
+OUT_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/af2_kras"
+LOG_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/logs"
+
+# --- Per-job inputs/outputs based on array index ---
+SILENT_IN="${CHUNK_DIR}/chunk_${SLURM_ARRAY_TASK_ID}.silent"
+SILENT_OUT="${OUT_DIR}/af2_kras_predictions_${SLURM_ARRAY_TASK_ID}.silent"
+SCOREFILEPATH="${OUT_DIR}/kras_scores_${SLURM_ARRAY_TASK_ID}.sc"
+
+# --- Setup ---
+mkdir -p ${OUT_DIR} ${LOG_DIR}
+
+# --- Validate input exists ---
+if [ ! -f "${SILENT_IN}" ]; then
+    echo "ERROR: Input silent file not found: ${SILENT_IN}"
+    exit 1
+fi
+
+echo "======================================================"
+echo "SLURM job:     ${SLURM_JOB_ID}"
+echo "Array task:    ${SLURM_ARRAY_TASK_ID}"
+echo "Node:          $(hostname)"
+echo "GPU:           $(nvidia-smi --query-gpu=name --format=csv,noheader)"
+echo "Input:         ${SILENT_IN}"
+echo "Output:        ${SILENT_OUT}"
+echo "Scores:        ${SCOREFILEPATH}"
+echo "Entries:       $(grep -c '^SCORE:' ${SILENT_IN} || echo 'unknown')"
+echo "Start time:    $(date)"
+echo "======================================================"
+
+# --- Run AF2 initial guess ---
+python ${DL_BINDER_DESIGN_DIR}/af2_initial_guess/predict.py \
+    -silent ${SILENT_IN} \
+    -outsilent ${SILENT_OUT} \
+    -scorefilepath ${SCOREFILEPATH}
+
+EXIT_CODE=$?
+
+echo "======================================================"
+echo "End time:      $(date)"
+echo "Exit code:     ${EXIT_CODE}"
+
+if [ ${EXIT_CODE} -ne 0 ]; then
+    echo "ERROR: predict.py failed with exit code ${EXIT_CODE}"
+    exit ${EXIT_CODE}
+fi
+
+# --- Quick output check ---
+if [ -f "${SCOREFILEPATH}" ]; then
+    N_SCORED=$(grep -c '^SCORE:' ${SCOREFILEPATH} 2>/dev/null || echo 0)
+    echo "Designs scored: ${N_SCORED}"
+else
+    echo "WARNING: Score file not created — check log for errors"
+fi
+echo "======================================================"
