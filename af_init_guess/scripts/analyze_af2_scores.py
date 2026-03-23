@@ -345,31 +345,32 @@ def extract_top_pdbs(top, silent_dir, out_dir):
     for tag, sf in tag_to_silent.items():
         silent_to_tags[sf].append(tag)
 
-    extracted = []
-    tool = shutil.which('silentextract') or shutil.which('silent_tools/silentextract')
+    tool = shutil.which('silentextractspecific')
     if not tool:
-        print("  silentextract not found on PATH. Trying silentextractspecific...")
-        tool = shutil.which('silentextractspecific')
+        print("  WARNING: silentextractspecific not found on PATH.")
+        print("    Make sure silent_tools is on PATH before running this script.")
+        return []
 
+    extracted = []
     for sf, sf_tags in silent_to_tags.items():
         print(f"  {os.path.basename(sf)}: extracting {len(sf_tags)} tag(s)")
-        if tool:
-            cmd = [tool, sf] + sf_tags
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=out_dir)
-            if result.returncode != 0:
-                print(f"    WARNING: silentextract error: {result.stderr[:200]}")
-        else:
-            print("  WARNING: silentextract not available. Install silent_tools:")
-            print("    git clone https://github.com/bcskim/silent_tools && "
-                  "export PATH=$PATH:$(pwd)/silent_tools")
-            break
 
-    # Move any extracted PDBs to out_dir if they landed in cwd
+        # Write tags to a temp file to avoid shell argument length limits
+        tag_file = os.path.join(out_dir, '_extract_tags.txt')
+        with open(tag_file, 'w') as fh:
+            fh.write('\n'.join(sf_tags) + '\n')
+
+        # silentextractspecific <silent_file> <tag1> <tag2> ...
+        cmd = [tool, sf] + sf_tags
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=out_dir)
+        if result.returncode != 0:
+            print(f"    WARNING: silentextractspecific error: {result.stderr[:200]}")
+
+        os.remove(tag_file)
+
+    # Collect extracted PDBs — silentextractspecific writes <tag>.pdb in cwd
     for tag in tags:
-        pdb_name = tag + '.pdb'
-        if os.path.exists(pdb_name) and not os.path.exists(os.path.join(out_dir, pdb_name)):
-            shutil.move(pdb_name, os.path.join(out_dir, pdb_name))
-        full_path = os.path.join(out_dir, pdb_name)
+        full_path = os.path.join(out_dir, tag + '.pdb')
         if os.path.exists(full_path):
             extracted.append(full_path)
 
