@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=kras_partdiff_t1
 #SBATCH --partition=gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
 #SBATCH --time=8:00:00
 #SBATCH --mem=10G
 #SBATCH --gres=gpu:1
@@ -15,37 +16,50 @@
 # Backbones: orient_247, 34, 47, 255, 260, 83, 158  (best pAE < 6)
 # partial_T=12  →  conservative perturbation, 100 designs per backbone
 # Total trajectories: 700
+#
+# Chain layout in RFdiffusion output PDBs (sequential residue numbering):
+#   Chain A = binder  (partially diffused, residues 1–N)
+#   Chain B = MHC     (fixed, residues N+1–N+178)
+#   Chain C = peptide (fixed, residues N+179–N+187)
+#
+# Both the contig and hotspot residue numbers are read directly from each
+# PDB so they are correct regardless of binder length.
 # =============================================================================
-
 set -euo pipefail
-
-
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
 R1_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
 R2_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2
-
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
 BACKBONES=(247 34 47 255 260 83 158)
 PARTIAL_T=12
 NUM_DESIGNS=100
 TIER=1
-
 # ── Shared diffusion settings ─────────────────────────────────────────────────
-HOTSPOTS='[C6,C7]'
 NOISE_CA=0
 NOISE_FRAME=0
-
-# ── Helper: get residue range for a given chain in a PDB ──────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
+# Returns the raw start-end residue numbers for a chain as they appear in
+# the PDB (e.g. "96-273" for chain B in a backbone with a 95-residue binder).
+# RFdiffusion uses these raw numbers directly when parsing the contig map.
 get_chain_range() {
     local pdb=$1 chain=$2
     local start end
     start=$(grep "^ATOM" "$pdb" | awk -v c="$chain" '$5==c {print $6+0}' | sort -n | head -1)
-    end=$(grep   "^ATOM" "$pdb" | awk -v c="$chain" '$5==c {print $6+0}' | sort -n | tail -1)
+    end=$(  grep "^ATOM" "$pdb" | awk -v c="$chain" '$5==c {print $6+0}' | sort -n | tail -1)
     echo "${start}-${end}"
 }
 
+# Returns the Nth residue number of a given chain (1-indexed within chain).
+# Used to map original hotspot positions (C6, C7) to sequential PDB numbers.
+get_chain_res() {
+    local pdb=$1 chain=$2 n=$3
+    grep "^ATOM" "$pdb" \
+        | awk -v c="$chain" '$5==c {print $6+0}' \
+        | sort -un \
+        | sed -n "${n}p"
+}
 # ── Run ───────────────────────────────────────────────────────────────────────
 echo "============================================================"
 echo "  Tier ${TIER} | partial_T=${PARTIAL_T} | n=${NUM_DESIGNS}"
@@ -54,7 +68,6 @@ echo "  SLURM job ID: ${SLURM_JOB_ID}"
 echo "  Node: $(hostname)"
 echo "  Started: $(date)"
 echo "============================================================"
-
 for bb in "${BACKBONES[@]}"; do
     input_pdb="${R1_PDB_DIR}/kras_orient_${bb}.pdb"
     out_prefix="${R2_OUT_ROOT}/tier${TIER}/orient_${bb}/orient_${bb}_pT${PARTIAL_T}_"
@@ -64,16 +77,24 @@ for bb in "${BACKBONES[@]}"; do
         continue
     fi
 
-    # Build contig dynamically from this backbone's chain lengths
-    RANGE_A=$(get_chain_range "$input_pdb" "A")
+    # Build contig from raw PDB residue numbers.
+    # Chain A (binder) is specified as a length range (no chain letter) so
+    # RFdiffusion treats it as hallucinated and applies partial_T noise to it.
+    # Chains B and C are specified with chain+residue to remain fully fixed.
+    BINDER_LEN=$(grep "^ATOM" "$input_pdb" | awk '$5=="A" {print $6+0}' | sort -un | wc -l)
     RANGE_B=$(get_chain_range "$input_pdb" "B")
     RANGE_C=$(get_chain_range "$input_pdb" "C")
-    CONTIGS="[B${RANGE_B}/0 C${RANGE_C}/0 A${RANGE_A}]"
+    CONTIGS="[${BINDER_LEN}-${BINDER_LEN}/0 B${RANGE_B}/0 C${RANGE_C}]"
+
+    # Map original hotspot positions C6, C7 to sequential PDB residue numbers
+    HS1=$(get_chain_res "$input_pdb" "C" 6)
+    HS2=$(get_chain_res "$input_pdb" "C" 7)
+    HOTSPOTS="[C${HS1},C${HS2}]"
 
     echo ""
-    echo "[$(date +%H:%M:%S)] Starting orient_${bb} (partial_T=${PARTIAL_T}, n=${NUM_DESIGNS})"
-    echo "  Chain A (binder): ${RANGE_A} | Chain B: ${RANGE_B} | Chain C: ${RANGE_C}"
-    echo "  Contig: ${CONTIGS}"
+    echo "[$(date +%H:%M:%S)] Starting orient_${bb}"
+    echo "  Binder length: ${BINDER_LEN} | Chain B: ${RANGE_B} | Chain C: ${RANGE_C}"
+    echo "  Contig: ${CONTIGS} | Hotspots: ${HOTSPOTS}"
     mkdir -p "$(dirname "$out_prefix")"
 
     "$PYTHON" "$SCRIPT" \
@@ -88,7 +109,6 @@ for bb in "${BACKBONES[@]}"; do
 
     echo "[$(date +%H:%M:%S)] Finished orient_${bb}"
 done
-
 echo ""
 echo "============================================================"
 echo "  Tier ${TIER} complete: $(date)"
