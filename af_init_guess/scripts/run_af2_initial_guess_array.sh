@@ -49,6 +49,7 @@ LOG_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/logs"
 SILENT_IN="${CHUNK_DIR}/chunk_${SLURM_ARRAY_TASK_ID}.silent"
 SILENT_OUT="${OUT_DIR}/af2_kras_predictions_${SLURM_ARRAY_TASK_ID}.silent"
 SCOREFILEPATH="${OUT_DIR}/kras_scores_${SLURM_ARRAY_TASK_ID}.sc"
+PAE_DIR="${OUT_DIR}/pae"
 
 # --- Setup ---
 mkdir -p ${OUT_DIR} ${LOG_DIR}
@@ -75,7 +76,8 @@ echo "======================================================"
 python ${DL_BINDER_DESIGN_DIR}/af2_initial_guess/predict.py \
     -silent ${SILENT_IN} \
     -outsilent ${SILENT_OUT} \
-    -scorefilename ${SCOREFILEPATH}
+    -scorefilename ${SCOREFILEPATH} \
+    -pae_outdir ${PAE_DIR}
 
 EXIT_CODE=$?
 
