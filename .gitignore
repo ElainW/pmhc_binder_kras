@@ -18,6 +18,8 @@ af_init_guess/scripts/tmp_*.silent
 af_init_guess/scripts/tmp_*.silent.idx
 af_init_guess/scripts/tmp_*.list
 af_init_guess/scripts/check.point
+af_init_guess/scripts/check.point.old
+af_init_guess/scripts/example.check.point
 envs/af2_init_guess/
 envs/af2_binder_design/
 af_init_guess/scripts/.ipynb_checkpoints/
