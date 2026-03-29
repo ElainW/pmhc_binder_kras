@@ -15,8 +15,14 @@ Assumes a two-chain input to af2_initial_guess:
 Requires the full N×N PAE matrix saved from af2_initial_guess predict.py
 as a .npy file (see -pae_outdir argument in predict.py).
 
-Dependencies: numpy
-    pip install numpy
+Chain lengths can be provided explicitly or inferred automatically from
+the corresponding AF2 output PDB file. The PDB chain order must be:
+  Chain A (or first chain)  -> binder
+  Chain B (or second chain) -> MHC
+  Chain C (or third chain)  -> peptide
+
+Dependencies: numpy, biopython (optional, for PDB parsing)
+    pip install numpy biopython
 
 Reference:
     Schaeffer & Dunbrack (2025) "Res ipSAE loquunt: What's wrong with
@@ -24,11 +30,16 @@ Reference:
     bioRxiv 10.1101/2025.02.10.637595
 
 Usage:
+    # Auto-detect chain lengths from PDB
     python pmhci_ipsae.py design_af2pred_pae.npy \\
-        --binder 72 --mhc 180 --peptide 9
+        --pdb design_af2pred.pdb
+
+    # Or provide lengths manually
+    python pmhci_ipsae.py design_af2pred_pae.npy \\
+        --binder 93 --mhc 178 --peptide 9
 
     # Or import as a library:
-    from pmhci_ipsae import score_binder_peptide_ipsae, print_summary
+    from pmhci_ipsae import score_binder_peptide_ipsae, chain_lengths_from_pdb
 """
 
 from __future__ import annotations
@@ -38,6 +49,76 @@ from collections import OrderedDict
 from pathlib import Path
 
 import numpy as np
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PDB chain length inference
+# ─────────────────────────────────────────────────────────────────────────────
+
+def chain_lengths_from_pdb(pdb_path: str | Path) -> OrderedDict:
+    """
+    Parse an AF2 output PDB and return chain lengths in the order
+    binder -> MHC -> peptide.
+
+    The PDB is expected to have exactly three chains in the order
+    produced by af2_initial_guess: binder (chain A), MHC (chain B),
+    peptide (chain C). Chain IDs are not assumed — only the order of
+    first appearance of chains in the ATOM records is used.
+
+    Uses a minimal hand-rolled parser so biopython is not required.
+
+    Parameters
+    ----------
+    pdb_path : path to an AF2 output PDB file
+
+    Returns
+    -------
+    OrderedDict([("binder", n_b), ("MHC", n_m), ("peptide", n_p)])
+
+    Raises
+    ------
+    ValueError if the PDB contains fewer or more than 3 chains, or if
+    the chain order cannot be determined.
+    """
+    pdb_path = Path(pdb_path)
+    if not pdb_path.exists():
+        raise FileNotFoundError(f"PDB not found: {pdb_path}")
+
+    # Collect unique (chain_id, res_seq, i_code) tuples per chain,
+    # preserving chain order of first appearance.
+    chain_order: list[str] = []
+    chain_residues: dict[str, set] = {}
+
+    with open(pdb_path) as fh:
+        for line in fh:
+            if not (line.startswith("ATOM") or line.startswith("HETATM")):
+                continue
+            chain_id = line[21]
+            res_seq  = line[22:26].strip()
+            i_code   = line[26].strip()
+            key      = (res_seq, i_code)
+
+            if chain_id not in chain_residues:
+                chain_order.append(chain_id)
+                chain_residues[chain_id] = set()
+            chain_residues[chain_id].add(key)
+
+    if len(chain_order) != 3:
+        raise ValueError(
+            f"Expected exactly 3 chains in {pdb_path.name}, "
+            f"found {len(chain_order)}: {chain_order}. "
+            f"Pass --binder / --mhc / --peptide manually instead."
+        )
+
+    n_binder  = len(chain_residues[chain_order[0]])
+    n_mhc     = len(chain_residues[chain_order[1]])
+    n_peptide = len(chain_residues[chain_order[2]])
+
+    return OrderedDict([
+        ("binder",  n_binder),
+        ("MHC",     n_mhc),
+        ("peptide", n_peptide),
+    ])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -83,8 +164,8 @@ def build_chain_slices(chain_lengths: OrderedDict) -> dict[str, slice]:
         af2_initial_guess concatenation order::
 
             OrderedDict([
-                ("binder",   72),   # chain 1 - designed minibinder
-                ("MHC",     180),   # chain 2 - truncated MHC alpha-chain
+                ("binder",   93),   # chain 1 - designed minibinder
+                ("MHC",     178),   # chain 2 - truncated MHC alpha-chain
                                     #           (peptide-binding domain only,
                                     #            no beta-2-microglobulin)
                 ("peptide",   9),   #           antigen peptide (appended to MHC)
@@ -237,12 +318,17 @@ def score_binder_peptide_ipsae(
 # Display
 # ─────────────────────────────────────────────────────────────────────────────
 
-def print_summary(results: dict, design_name: str = "") -> None:
+def print_summary(results: dict, design_name: str = "",
+                  chain_lengths: OrderedDict | None = None) -> None:
     """Pretty-print binder<->peptide ipSAE results."""
     header = f"  {design_name}" if design_name else ""
     print(f"\n{'─'*55}")
     print(f"pMHCI Binder<->Peptide ipSAE{header}")
     print(f"{'─'*55}")
+    if chain_lengths is not None:
+        print(f"  Chain lengths: binder={chain_lengths['binder']}, "
+              f"MHC={chain_lengths['MHC']}, "
+              f"peptide={chain_lengths['peptide']}")
     print(f"  ipSAE binder<->peptide : {results['ipsae_binder_peptide']:.4f}  <- primary metric")
     print(f"  ipSAE (bp direction)   : {results['ipsae_bp']:.4f}")
     print(f"  ipSAE (pb direction)   : {results['ipsae_pb']:.4f}")
@@ -259,30 +345,84 @@ def print_summary(results: dict, design_name: str = "") -> None:
 
 def _cli() -> None:
     parser = argparse.ArgumentParser(
-        description="Compute binder<->peptide ipSAE for a pMHCI + minibinder complex.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description=(
+            "Compute binder<->peptide ipSAE for a pMHCI + minibinder complex.\n\n"
+            "Chain lengths can be detected automatically from the AF2 output PDB\n"
+            "(--pdb), or provided manually (--binder / --mhc / --peptide).\n"
+            "Manual values take precedence if both are given."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("npy",        help="*_pae.npy file saved by af2_initial_guess predict.py")
-    parser.add_argument("--binder",   type=int, required=True, help="Minibinder length (residues)")
-    parser.add_argument("--mhc",      type=int, required=True, help="Truncated MHC alpha-chain length (no B2M)")
-    parser.add_argument("--peptide",  type=int, required=True, help="Antigen peptide length")
-    parser.add_argument("--cutoff",   type=float, default=12.0, help="PAE contact cutoff (Angstroms)")
-    parser.add_argument("--name",     type=str,   default="",   help="Design label for output")
+    parser.add_argument("npy",
+        help="*_pae.npy file saved by af2_initial_guess predict.py")
+
+    # Auto-detection
+    parser.add_argument("--pdb", type=str, default="",
+        help=(
+            "AF2 output PDB for this design. Chain order must be "
+            "binder / MHC / peptide. Used to auto-detect chain lengths."
+        ))
+
+    # Manual overrides
+    parser.add_argument("--binder",  type=int, default=None,
+        help="Minibinder length (residues). Overrides --pdb if given.")
+    parser.add_argument("--mhc",     type=int, default=None,
+        help="Truncated MHC alpha-chain length (no B2M). Overrides --pdb if given.")
+    parser.add_argument("--peptide", type=int, default=None,
+        help="Antigen peptide length. Overrides --pdb if given.")
+
+    parser.add_argument("--cutoff",  type=float, default=12.0,
+        help="PAE contact cutoff in Angstroms (default: 12.0)")
+    parser.add_argument("--name",    type=str,   default="",
+        help="Design label for output display")
     args = parser.parse_args()
 
-    # af2_initial_guess order: binder first, then truncated MHC + peptide
-    chain_lengths = OrderedDict([
-        ("binder",  args.binder),
-        ("MHC",     args.mhc),
-        ("peptide", args.peptide),
-    ])
+    # ── Resolve chain lengths ─────────────────────────────────────────────
+    manual = (args.binder, args.mhc, args.peptide)
+    all_manual   = all(v is not None for v in manual)
+    any_manual   = any(v is not None for v in manual)
+
+    if all_manual:
+        # All three lengths given explicitly
+        chain_lengths = OrderedDict([
+            ("binder",  args.binder),
+            ("MHC",     args.mhc),
+            ("peptide", args.peptide),
+        ])
+        source = "manual"
+
+    elif args.pdb:
+        # Auto-detect from PDB, then apply any partial manual overrides
+        chain_lengths = chain_lengths_from_pdb(args.pdb)
+        source = f"auto-detected from {Path(args.pdb).name}"
+
+        if any_manual:
+            if args.binder  is not None: chain_lengths["binder"]  = args.binder
+            if args.mhc     is not None: chain_lengths["MHC"]     = args.mhc
+            if args.peptide is not None: chain_lengths["peptide"] = args.peptide
+            source += " (with manual overrides)"
+
+    else:
+        parser.error(
+            "Provide either --pdb (auto-detect chain lengths) or all three of "
+            "--binder / --mhc / --peptide."
+        )
+
+    print(f"Chain lengths [{source}]: "
+          f"binder={chain_lengths['binder']}, "
+          f"MHC={chain_lengths['MHC']}, "
+          f"peptide={chain_lengths['peptide']}")
 
     results = score_binder_peptide_ipsae(
         npy_path=args.npy,
         chain_lengths=chain_lengths,
         pae_cutoff=args.cutoff,
     )
-    print_summary(results, design_name=args.name or Path(args.npy).stem)
+    print_summary(
+        results,
+        design_name=args.name or Path(args.npy).stem,
+        chain_lengths=chain_lengths,
+    )
 
 
 if __name__ == "__main__":
