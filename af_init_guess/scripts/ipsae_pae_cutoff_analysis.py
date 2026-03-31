@@ -147,13 +147,16 @@ def approach1_distribution(
         all_vals.append(vals)
 
         color = STYLE["colors"][i % len(STYLE["colors"])]
+#         ax_hist.hist(vals, bins=64, alpha=0.5, density=True,
+#                      color=color, label=label)
         ax_hist.hist(vals, bins=64, alpha=0.5, density=True,
-                     color=color, label=label)
+                     color=color)
 
         # CDF per design (thin lines)
         sv  = np.sort(vals)
         cdf = np.arange(1, len(sv) + 1) / len(sv)
-        ax_cdf.plot(sv, cdf, color=color, alpha=0.7, linewidth=1.2, label=label)
+#         ax_cdf.plot(sv, cdf, color=color, alpha=0.7, linewidth=1.2, label=label)
+        ax_cdf.plot(sv, cdf, color=color, alpha=0.7, linewidth=1.2)
 
     # Pooled CDF (thick)
     pooled = np.concatenate(all_vals)
@@ -270,7 +273,7 @@ def approach2_sensitivity(
     for i, label in enumerate(labels):
         ax_score.plot(cutoffs, score_matrix[i, :],
                       color=STYLE["colors"][i % len(STYLE["colors"])],
-                      alpha=0.8, linewidth=1.5, label=label)
+                      alpha=0.8, linewidth=1.5)
     ax_score.axvline(nominal_cutoff, **{k: v for k, v in STYLE["marker_cutoff"].items()
                                         if k != "label"},
                      label=f"nominal = {nominal_cutoff} Å")
@@ -313,7 +316,7 @@ def approach2_sensitivity(
     )
     ax_heatmap.axvline(nominal_cutoff, color="#e63946", linestyle="--", linewidth=1.8)
     ax_heatmap.set_yticks(range(len(labels)))
-    ax_heatmap.set_yticklabels(labels, fontsize=7)
+#     ax_heatmap.set_yticklabels(labels, fontsize=7)
     ax_heatmap.set_xlabel("PAE cutoff (Å)")
     ax_heatmap.set_title("(d) ipSAE heatmap (designs × cutoffs)")
     plt.colorbar(im, ax=ax_heatmap, label="ipSAE")
