@@ -202,6 +202,7 @@ def filter_backbones(
     contact_dist=8.0,
     required_peptide_positions=None,
     pattern="*.pdb",
+    log_file="filter_log.csv",
 ):
     """
     Filter partial diffusion backbone PDBs by:
@@ -279,7 +280,7 @@ def filter_backbones(
         print(f"  Failed contacts: {sum(not r['passes_contacts'] for r in results)}")
     print(f"{'='*50}")
 
-    log_path = os.path.join(output_dir, "filter_log.csv")
+    log_path = os.path.join(output_dir, log_file)
     pd.DataFrame(results).to_csv(log_path, index=False)
     print(f"Log: {log_path}")
 
@@ -360,6 +361,12 @@ def parse_args():
         default="*.pdb",
         help="Glob pattern for PDB files (default: *.pdb)."
     )
+    parser.add_argument(
+        "--log_file",
+        type=str,
+        default="filter_log.csv",
+        help="Log of filtering (default: filter_log.csv)."
+    )
 
     return parser.parse_args()
 
@@ -392,4 +399,5 @@ if __name__ == "__main__":
         contact_dist              = args.contact_dist,
         required_peptide_positions= args.required_peptide_positions,
         pattern                   = args.pattern,
+        log_file                  = args.log_file
     )
