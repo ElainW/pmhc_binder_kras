@@ -215,10 +215,7 @@ def filter_backbones(
     passed  = 0
 
     for input_dir in input_dirs:
-        pdb_files = sorted(glob.glob(os.path.join(input_dir, "**", pattern),
-                                     recursive=True))
-        if not pdb_files:
-            pdb_files = sorted(glob.glob(os.path.join(input_dir, pattern)))
+        pdb_files = sorted(glob.glob(os.path.join(input_dir, "*", pattern)))
         print(f"Found {len(pdb_files)} structures in {input_dir}")
 
         for pdb_path in pdb_files:
