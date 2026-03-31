@@ -1,9 +1,16 @@
 #!/bin/bash
-#SBATCH -p gpu
-#SBATCH --mem=32g
-#SBATCH --gres=gpu:rtx2080:1
-#SBATCH -c 3
+#SBATCH --job-name=proteinmpnn_r2
+#SBATCH --partition=gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
+#SBATCH --time=5:00:00
+#SBATCH --mem=10G
+#SBATCH --gres=gpu:1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
+#SBATCH --mail-user=wangyilan0304@gmail.com
 #SBATCH --output=../slurm/kras_r2.out
+#SBATCH --error=../slurm/kras_r2.err
 
 # source activate mlfold
 #PYTHON=/n/groups/marks/software/anaconda_o2/envs/proteingym_env/bin/python
