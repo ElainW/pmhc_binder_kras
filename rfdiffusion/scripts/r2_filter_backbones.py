@@ -254,7 +254,7 @@ def filter_backbones(
                 if passes_all:
                     # preserve original backbone name for traceability
                     base        = os.path.splitext(os.path.basename(pdb_path))[0]
-                    filename_new = os.path.join(output_dir, f"{base}_filtered.pdb")
+                    filename_new = os.path.join(output_dir, f"{base}.pdb")
                     pose.dump_pdb(filename_new)
                     passed += 1
                     results[-1]["filename_new"] = filename_new
