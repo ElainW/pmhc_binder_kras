@@ -2,7 +2,7 @@
 #SBATCH --job-name=kras_partdiff_t3
 #SBATCH --partition=gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH --time=1:00:00
+#SBATCH --time=2:30:00
 #SBATCH --mem=10G
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
@@ -32,8 +32,7 @@ SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
 R1_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
 R2_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
-# BACKBONES=(166 324 95 51 348)
-BACKBONES=(74 187 258 342 210) # additional backbones that look borderline ok from ipSAE minus duplicate from other tiers
+BACKBONES=(166 324 95 51 348 74 187 258 342 210) # additional backbones that look borderline ok from ipSAE minus duplicate from other tiers
 PARTIAL_T=25
 NUM_DESIGNS=20
 TIER=3
