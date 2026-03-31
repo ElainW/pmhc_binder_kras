@@ -352,10 +352,24 @@ def approach2_sensitivity(
 def _crystal_ca_coords(
     pdb_path: str,
     chain_id: str,
+    slice_last_n: int | None = None,
+    slice_first_n: int | None = None,
 ) -> tuple[list[int], np.ndarray]:
     """
     Extract Cα coordinates for a given chain from a crystal PDB.
-    Returns (residue_numbers, coords_array of shape (N, 3)).
+
+    Parameters
+    ----------
+    pdb_path     : path to PDB file
+    chain_id     : chain ID to extract (e.g. "A", "B")
+    slice_last_n : if set, return only the LAST n residues of the chain.
+                   Use this when the peptide is the C-terminal portion of
+                   a merged chain (e.g. chain B = MHC + peptide).
+    slice_first_n: if set, return only the FIRST n residues of the chain.
+
+    Returns
+    -------
+    (residue_numbers, coords_array of shape (N, 3))
     """
     resnums: list[int] = []
     coords:  list[list[float]] = []
@@ -368,13 +382,27 @@ def _crystal_ca_coords(
                 continue
             if line[12:16].strip() != "CA":
                 continue
+            # Skip alternate conformers (B, C, ...) but keep blank or 'A'.
+            # Do NOT deduplicate by residue number — merged chains (e.g.
+            # MHC+peptide in one chain) can legitimately repeat residue
+            # numbers, and deduplicating by number would silently drop the
+            # peptide residues 1-10 if they clash with MHC residues 1-10.
+            altloc = line[16]
+            if altloc not in (' ', 'A'):
+                continue
             resnum = int(line[22:26].strip())
             x = float(line[30:38])
             y = float(line[38:46])
             z = float(line[46:54])
-            if resnum not in resnums:   # deduplicate (alt conformers)
-                resnums.append(resnum)
-                coords.append([x, y, z])
+            resnums.append(resnum)
+            coords.append([x, y, z])
+
+    if slice_last_n is not None:
+        resnums = resnums[-slice_last_n:]
+        coords  = coords[-slice_last_n:]
+    elif slice_first_n is not None:
+        resnums = resnums[:slice_first_n]
+        coords  = coords[:slice_first_n]
 
     return resnums, np.array(coords)
 
@@ -384,6 +412,7 @@ def approach3_crystal(
     crystal_pdb: str,
     binder_chain_crystal: str = "A",
     peptide_chain_crystal: str = "C",
+    merged_target_chain: str | None = None,
     binder: int | None = None,
     mhc: int | None = None,
     peptide: int | None = None,
@@ -439,8 +468,18 @@ def approach3_crystal(
     print(f"PAE submatrix: {n_b} binder × {n_p} peptide = {n_b*n_p} pairs")
 
     # Load crystal Cα coordinates
-    _, binder_coords  = _crystal_ca_coords(crystal_pdb, binder_chain_crystal)
-    _, peptide_coords = _crystal_ca_coords(crystal_pdb, peptide_chain_crystal)
+    _, binder_coords = _crystal_ca_coords(crystal_pdb, binder_chain_crystal)
+
+    if merged_target_chain is not None:
+        # Layout 2: crystal chain B = MHC+peptide; peptide = last n_p residues
+        print(f"  Crystal layout: merged target chain '{merged_target_chain}' — "
+              f"extracting last {n_p} residues as peptide")
+        _, peptide_coords = _crystal_ca_coords(
+            crystal_pdb, merged_target_chain, slice_last_n=n_p
+        )
+    else:
+        # Layout 1: peptide has its own chain
+        _, peptide_coords = _crystal_ca_coords(crystal_pdb, peptide_chain_crystal)
 
     if len(binder_coords) != n_b:
         print(
@@ -646,7 +685,13 @@ def _cli() -> None:
     p3.add_argument("--binder-chain-crystal",  type=str, default="A",
                     help="Chain ID of binder in crystal PDB (default: A)")
     p3.add_argument("--peptide-chain-crystal", type=str, default="C",
-                    help="Chain ID of peptide in crystal PDB (default: C)")
+                    help="Chain ID of peptide in crystal PDB (default: C) "
+                    "Ignored if --merged-target-chain is set.")
+    p3.add_argument("--merged-target-chain", type=str, default=None,
+                    help="Set this to the chain ID that contains MHC + peptide "
+                         "concatenated (e.g. 'B' for the 9O5S AF2 output). "
+                         "The peptide is extracted as the last --peptide residues "
+                         "of that chain. Overrides --peptide-chain-crystal.")
     p3.add_argument("--dist-cutoff", type=float, default=8.0,
                     help="Cα distance threshold for 'contact' in crystal (default: 8.0 Å)")
 
@@ -683,6 +728,7 @@ def _cli() -> None:
             crystal_pdb=args.crystal_pdb,
             binder_chain_crystal=args.binder_chain_crystal,
             peptide_chain_crystal=args.peptide_chain_crystal,
+            merged_target_chain=args.merged_target_chain,
             binder=args.binder, mhc=args.mhc, peptide=args.peptide,
             pred_pdb=args.pred_pdb or (pdb_list[0]),
             dist_cutoff=args.dist_cutoff,
