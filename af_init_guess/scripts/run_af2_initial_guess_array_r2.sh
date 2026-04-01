@@ -34,8 +34,6 @@ if not any('cuda' in str(d).lower() for d in devices):
     sys.exit(1)
 "
 
-SLURM_ARRAY_TASK_ID=0
-
 if [ $? -ne 0 ]; then
     echo "ERROR: GPU not visible to JAX — check CUDA/cuDNN setup"
     exit 1
