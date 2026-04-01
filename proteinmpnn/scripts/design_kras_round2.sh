@@ -2,11 +2,10 @@
 #SBATCH --job-name=proteinmpnn_r2
 #SBATCH --partition=gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH --time=5:00:00
-#SBATCH --mem=10G
+#SBATCH --time=4:00:00
+#SBATCH --mem=3G
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
 #SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
 #SBATCH --mail-user=wangyilan0304@gmail.com
 #SBATCH --output=../slurm/kras_r2.out
