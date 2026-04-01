@@ -4,6 +4,7 @@ pMHCI_binder_design/
 dl_binder_design/
 proteinmpnn/outputs/
 proteinmpnn/test/
+proteinmpnn/slurm/
 rfdiffusion/outputs/
 rfdiffusion/slurm/
 silent_tools/
@@ -11,6 +12,7 @@ rfdiffusion/scripts/outputs/
 rfdiffusion/scripts/.ipynb_checkpoints/
 proteinmpnn/scripts/.ipynb_checkpoints/
 proteinmpnn/input/kras/*.jsonl
+proteinmpnn/input/kras_r2/
 af_init_guess/inputs/
 af_init_guess/outputs/
 af_init_guess/logs/
@@ -19,7 +21,7 @@ af_init_guess/scripts/tmp_*.silent.idx
 af_init_guess/scripts/tmp_*.list
 af_init_guess/scripts/check.point
 af_init_guess/scripts/check.point.old
-af_init_guess/scripts/example.check.point
+af_init_guess/scripts/*.check.point
 envs/af2_init_guess/
 envs/af2_binder_design/
 af_init_guess/scripts/.ipynb_checkpoints/
