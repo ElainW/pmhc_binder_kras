@@ -2,7 +2,7 @@
 #SBATCH -J af2_ig_kras
 #SBATCH -p gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH -t 3:00:00
+#SBATCH -t 1:00:00
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --mem=10G
 #SBATCH -c 4
