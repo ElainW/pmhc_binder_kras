@@ -55,21 +55,35 @@ import numpy as np
 # PDB chain length inference
 # ─────────────────────────────────────────────────────────────────────────────
 
-def chain_lengths_from_pdb(pdb_path: str | Path) -> OrderedDict:
+def chain_lengths_from_pdb(
+    pdb_path: str | Path,
+    peptide_length: int | None = None,
+) -> OrderedDict:
     """
     Parse an AF2 output PDB and return chain lengths in the order
     binder -> MHC -> peptide.
 
-    The PDB is expected to have exactly three chains in the order
-    produced by af2_initial_guess: binder (chain A), MHC (chain B),
-    peptide (chain C). Chain IDs are not assumed — only the order of
-    first appearance of chains in the ATOM records is used.
+    Two supported layouts
+    ----------------------
+    Layout 1 — three chains (Round 1 af2_initial_guess output):
+        Chain A = binder
+        Chain B = MHC
+        Chain C = peptide
+        peptide_length not required.
 
-    Uses a minimal hand-rolled parser so biopython is not required.
+    Layout 2 — two chains (Round 2 partial diffusion output):
+        Chain A = binder
+        Chain B = MHC + peptide merged
+        peptide_length REQUIRED to split chain B into MHC and peptide.
+        MHC length = len(chain B) - peptide_length.
+
+    Chain IDs are not assumed — only the order of first appearance in
+    ATOM records is used. Uses a minimal hand-rolled parser.
 
     Parameters
     ----------
-    pdb_path : path to an AF2 output PDB file
+    pdb_path       : path to an AF2 output PDB file
+    peptide_length : required for 2-chain PDBs; ignored for 3-chain PDBs.
 
     Returns
     -------
@@ -77,14 +91,15 @@ def chain_lengths_from_pdb(pdb_path: str | Path) -> OrderedDict:
 
     Raises
     ------
-    ValueError if the PDB contains fewer or more than 3 chains, or if
-    the chain order cannot be determined.
+    ValueError  if chain count is not 2 or 3, or if 2-chain layout is
+                used without providing peptide_length.
+    FileNotFoundError if pdb_path does not exist.
     """
     pdb_path = Path(pdb_path)
     if not pdb_path.exists():
         raise FileNotFoundError(f"PDB not found: {pdb_path}")
 
-    # Collect unique (chain_id, res_seq, i_code) tuples per chain,
+    # Collect unique (res_seq, i_code) tuples per chain,
     # preserving chain order of first appearance.
     chain_order: list[str] = []
     chain_residues: dict[str, set] = {}
@@ -103,23 +118,47 @@ def chain_lengths_from_pdb(pdb_path: str | Path) -> OrderedDict:
                 chain_residues[chain_id] = set()
             chain_residues[chain_id].add(key)
 
-    if len(chain_order) != 3:
+    n_chains = len(chain_order)
+
+    if n_chains == 3:
+        # Layout 1: binder / MHC / peptide as separate chains
+        n_binder  = len(chain_residues[chain_order[0]])
+        n_mhc     = len(chain_residues[chain_order[1]])
+        n_peptide = len(chain_residues[chain_order[2]])
+
+    elif n_chains == 2:
+        # Layout 2: binder / (MHC + peptide merged)
+        if peptide_length is None:
+            raise ValueError(
+                f"{pdb_path.name} has 2 chains {chain_order} — this is the "
+                f"merged-target layout (chain A=binder, chain B=MHC+peptide). "
+                f"Provide peptide_length so MHC length can be derived as "
+                f"len(chain B) - peptide_length. "
+                f"Alternatively pass --binder / --mhc / --peptide manually."
+            )
+        n_binder       = len(chain_residues[chain_order[0]])
+        n_target_total = len(chain_residues[chain_order[1]])
+        n_peptide      = peptide_length
+        n_mhc          = n_target_total - n_peptide
+        if n_mhc <= 0:
+            raise ValueError(
+                f"peptide_length={peptide_length} is >= total target chain "
+                f"length {n_target_total} in {pdb_path.name}. "
+                f"Check peptide_length."
+            )
+
+    else:
         raise ValueError(
-            f"Expected exactly 3 chains in {pdb_path.name}, "
-            f"found {len(chain_order)}: {chain_order}. "
+            f"Expected 2 or 3 chains in {pdb_path.name}, "
+            f"found {n_chains}: {chain_order}. "
             f"Pass --binder / --mhc / --peptide manually instead."
         )
-
-    n_binder  = len(chain_residues[chain_order[0]])
-    n_mhc     = len(chain_residues[chain_order[1]])
-    n_peptide = len(chain_residues[chain_order[2]])
 
     return OrderedDict([
         ("binder",  n_binder),
         ("MHC",     n_mhc),
         ("peptide", n_peptide),
     ])
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAE loading
