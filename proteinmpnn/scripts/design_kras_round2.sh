@@ -34,6 +34,7 @@ ${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/helper_scripts/assign_fixed_chains.py --inpu
 ${PYTHON} ${PROTEINMPNN_SCRIPT_DIR}/protein_mpnn_run.py \
         --jsonl_path $path_for_parsed_chains \
         --chain_id_jsonl $path_for_assigned_chains \
+        --omit_AAs C \
         --out_folder $output_dir \
         --num_seq_per_target 8 \
         --sampling_temp "0.1" \
