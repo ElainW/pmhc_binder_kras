@@ -110,7 +110,7 @@ def score_pdb(pdb_path: str, binder_chain: str, pmhc_chain: str,
     # total CMS across the whole peptide (useful for overall contact ranking)
     result["cms_peptide_total"] = round(sum(cms_values), 4)
 
-    # also store the P4 score separately for convenience (the neomutant position)
+    # also store the P5 score separately for convenience (the neomutant position)
     result["cms_p5_neoepitope"] = result["cms_p5"]
 
     return result
@@ -154,7 +154,7 @@ def main():
     # column order: description, cms_p1..p9, cms_peptide_total, cms_p4_neoepitope
     cols = (["description"]
             + [f"cms_p{i}" for i in range(1, args.peptide_len + 1)]
-            + ["cms_peptide_total", "cms_p4_neoepitope"])
+            + ["cms_peptide_total", "cms_p5_neoepitope"])
     df = df[cols]
     df.to_csv(args.out_csv, sep="\t", index=False)
     print(f"Written to {args.out_csv}")
