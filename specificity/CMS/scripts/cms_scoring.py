@@ -111,7 +111,7 @@ def score_pdb(pdb_path: str, binder_chain: str, pmhc_chain: str,
     result["cms_peptide_total"] = round(sum(cms_values), 4)
 
     # also store the P4 score separately for convenience (the neomutant position)
-    result["cms_p4_neoepitope"] = result["cms_p4"]
+    result["cms_p5_neoepitope"] = result["cms_p5"]
 
     return result
 
