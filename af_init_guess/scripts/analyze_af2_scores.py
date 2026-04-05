@@ -32,6 +32,7 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from collections import defaultdict
 
 
 # ── Score file parsing ────────────────────────────────────────────────────────
@@ -340,7 +341,6 @@ def extract_top_pdbs(top, silent_dir, out_dir):
         print(f"  WARNING: {len(missing)} tag(s) not found in any silent file: {missing[:5]}")
 
     # Group tags by silent file and extract
-    from collections import defaultdict
     silent_to_tags = defaultdict(list)
     for tag, sf in tag_to_silent.items():
         silent_to_tags[sf].append(tag)
