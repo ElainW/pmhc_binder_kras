@@ -79,12 +79,13 @@ def main():
 
         for resnum, aa_wt in pep_residues:
             aa_mt = 'A'
-            rows.append({
-                'mutant': f'{aa_wt}{resnum}{aa_mt}',
-                'is_WT': False,
-                'wt_pdb': pdb_name,
-                'mutant_chain': 'B'
-            })
+            if aa_wt != 'A':
+                rows.append({
+                    'mutant': f'{aa_wt}{resnum}{aa_mt}',
+                    'is_WT': False,
+                    'wt_pdb': pdb_name,
+                    'mutant_chain': 'B'
+                })
 
     df = pd.DataFrame(rows)
     os.makedirs(os.path.dirname(args.out_csv), exist_ok=True)
