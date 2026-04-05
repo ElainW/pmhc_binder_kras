@@ -24,6 +24,7 @@ af_init_guess/scripts/check.point.old
 af_init_guess/scripts/*.check.point
 envs/af2_init_guess/
 envs/af2_binder_design/
+envs/proteinmpnn/
 af_init_guess/scripts/.ipynb_checkpoints/
 af_init_guess/scripts/__pycache__/
 
