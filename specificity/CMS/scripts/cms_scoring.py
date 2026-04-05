@@ -76,17 +76,15 @@ def score_cms_for_residue(pose, binder_chain: str, peptide_res_idx: int,
       binder_selector  = chainA
       distance_weight  = 0.5
     """
-    from pyrosetta.rosetta.protocols.simple_filters import ContactMolecularSurfaceFilter
-
     # selectors
     target_sel = ResidueIndexSelector(str(peptide_res_idx))
     binder_sel = ChainSelector(binder_chain)
 
     cms_filter = ContactMolecularSurfaceFilter()
-    cms_filter.set_distance_weight(distance_weight)
-    cms_filter.set_target_selector(target_sel)
-    cms_filter.set_binder_selector(binder_sel)
-    cms_filter.set_verbose(False)
+    cms_filter.distance_weight(distance_weight)
+    cms_filter.selector2(target_sel)
+    cms_filter.selector1(binder_sel)
+    cms_filter.verbose(False)
 
     # report() returns the float score regardless of threshold (confidence=0 equivalent)
     return cms_filter.report_sm(pose)
