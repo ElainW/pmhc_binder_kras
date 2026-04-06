@@ -132,7 +132,7 @@ total_path      = os.getcwd()
 runs_path     = os.path.join(os.path.dirname(total_path), "outputs", "r2", f"{prefix}_runs") # will update r2 in future rounds
 commands_path = os.path.join(total_path, f"{prefix}_commands")
 slurm_path    = os.path.join(os.path.dirname(total_path), "slurm", "r2", prefix) # will update r2 in future rounds
-splits_path   = os.path.join(os.path.dirname(total_path), "inputs", "r2", "splits") # will update r2 in future rounds
+splits_path   = os.path.join(os.path.dirname(total_path), "inputs", "r2", f"{prefix}_splits") # will update r2 in future rounds
 
 os.makedirs(runs_path,   exist_ok=True)
 os.makedirs(commands_path, exist_ok=True)
@@ -245,7 +245,7 @@ CMD=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" {commands_list})
 eval "$CMD"
 """)
 
-run_submit = os.path.join(total_path, "run_submit.sh")
+run_submit = os.path.join(total_path, f"{prefix}_run_submit.sh")
 with open(run_submit, 'w') as f:
     f.write(f"#!/bin/bash\n")
     f.write(f"sbatch {submit_script}\n")
@@ -253,7 +253,7 @@ cmd(f"chmod +x {run_submit}")
 
 # ── Test command ──────────────────────────────────────────────────────────────
 
-test_script = os.path.join(total_path, "test_command.sh")
+test_script = os.path.join(total_path, f"{prefix}_test_command.sh")
 with open(test_script, 'w') as f:
     f.write(f"#!/bin/bash\n")
     f.write(commands[0] + "\n")
@@ -261,7 +261,7 @@ cmd(f"chmod +x {test_script}")
 
 print("\n" + "/"*80)
 print("Test your setup first:")
-print(f"  ./test_command.sh")
+print(f"bash  {test_script}")
 print("\nWhen ready, submit all jobs:")
-print(f"  ./run_submit.sh")
+print(f"bash  {run_submit}")
 print("/"*80 + "\n")
