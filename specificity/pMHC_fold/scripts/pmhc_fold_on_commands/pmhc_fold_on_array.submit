@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH -p gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
+#SBATCH --gres=gpu:l40s:1
+#SBATCH -t 01:30:00
+#SBATCH --mem=16G
+#SBATCH -c 2
+#SBATCH -o /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/slurm/r2/pmhc_fold_on/slurm_%A_%a.out
+#SBATCH -e /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/slurm/r2/pmhc_fold_on/slurm_%A_%a.err
+#SBATCH -a 0-9
+
+# Read the command for this array task
+CMD=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold_on_commands/commands.list)
+eval "$CMD"
