@@ -22,7 +22,7 @@ from alphafold.data.parsers import TemplateHit, parse_hhr
 from alphafold.data.tools.hhsearch import HHSearch
 from alphafold.data.tools.hhblits import HHBlits
 from alphafold.data import templates
-import util # where is this?
+import util
 
 import random
 
