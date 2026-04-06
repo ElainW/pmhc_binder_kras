@@ -708,9 +708,10 @@ for index, row in df_sample.iterrows():
 
     keys_to_remove = ['distogram', 'experimentally_resolved', 'masked_msa', 'predicted_lddt', 'structure_module', 'aligned_confidence_probs', 'max_predicted_aligned_error', 'pae_logits']
 
-
+    print(prediction_result_dict['model_2_ptm'].keys())
     for key in keys_to_remove:
-        prediction_result_dict['model_2_ptm'].pop(key)
+        if key in prediction_result_dict['model_2_ptm']:
+            prediction_result_dict['model_2_ptm'].pop(key)
 
 
     np.savez('{}_pred_results.npz'.format(out_prefix), prediction_result_dict)
