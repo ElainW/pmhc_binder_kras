@@ -191,7 +191,7 @@ def predict_structure(prefix, feature_dict, do_relax=True, random_seed=0):
         model_runner.params = params
 
         processed_feature_dict = model_runner.process_features(feature_dict, random_seed=random_seed)
-        prediction_result = model_runner.predict(processed_feature_dict)
+        prediction_result = model_runner.predict(processed_feature_dict, random_seed=random_seed)
         prediction_result_dict[model_name] = prediction_result
 
         unrelaxed_protein = protein.from_prediction(processed_feature_dict,prediction_result)
