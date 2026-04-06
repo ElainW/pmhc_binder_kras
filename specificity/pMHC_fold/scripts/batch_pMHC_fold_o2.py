@@ -6,7 +6,7 @@ Submits pMHC fold jobs to O2 SLURM cluster.
 On-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_on \
-        --script /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/pmhc_fold.py \
+        --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGADGVGK \
         --minib_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
@@ -16,7 +16,7 @@ On-target example:
 Off-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_off \
-        --script /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/pmhc_fold.py \
+        --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGAGGVGK \
         --minib_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \

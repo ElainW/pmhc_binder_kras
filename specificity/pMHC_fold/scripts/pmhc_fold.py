@@ -414,7 +414,7 @@ for model_name in [args.model_name]:
 out_dir = args.out_dir
 print('out_dir:', out_dir)
 
-alignment_df = pd.read_csv('../../alignments_all_alleles_vs_pdb_June29_2024.csv')
+alignment_df = pd.read_csv('/n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/alignments_all_alleles_vs_pdb_June29_2024.csv')
 
 
 mhc_template_dir = args.mhc_dir
@@ -523,13 +523,13 @@ for index, row in df_sample.iterrows():
         assert query_sequence == minibinder_seq + mhc_seq + peptide_seq_query
 
         query_structure_path = minib_query_structures + pdb_name + '.pdb'
-        mhc_structure_filename = [filename for filename in os.listdir('../../' + mhc_template_dir) if filename.startswith(template_pdbid) and filename.endswith('.pdb')][0]
-        mhc_structure_path = os.path.join('../../' + mhc_template_dir, mhc_structure_filename)
+        mhc_structure_filename = [filename for filename in os.listdir(mhc_template_dir) if filename.startswith(template_pdbid) and filename.endswith('.pdb')][0]
+        mhc_structure_path = os.path.join(mhc_template_dir, mhc_structure_filename)
 
 
         # Load in the query and template pdb structures
         query_pdb_list = []
-        with open('../../' + minib_query_structures + pdb_name + '.pdb') as qf:
+        with open(minib_query_structures + pdb_name + '.pdb') as qf:
             query_pdbstr = qf.read()
             for chain in ['A', 'B']:
                 query_pdb_list.append(from_pdb_string(query_pdbstr, chain))
