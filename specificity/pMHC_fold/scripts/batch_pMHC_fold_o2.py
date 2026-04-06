@@ -12,8 +12,8 @@ On-target example:
         --alleles "A*11:01" \
         --peptides VVGADGVGK \
         --minib_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --structs_per_job 10 \
-        --t 08:00:00
+        --structs_per_job 20 \
+        --t 01:30:00
 
 Off-target example:
     python batch_pMHC_fold_o2.py \
@@ -22,8 +22,8 @@ Off-target example:
         --alleles "A*11:01" \
         --peptides VVGAGGVGK \
         --minib_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
-        --structs_per_job 10 \
-        --t 08:00:00
+        --structs_per_job 20 \
+        --t 01:30:00
 """
 
 import sys, subprocess, os
@@ -109,8 +109,8 @@ parser.add_argument("--peptides",        nargs='+', required=True)
 parser.add_argument("--minib_dir",       type=str, required=True)
 parser.add_argument("--structs_per_job", type=int, default=10)
 parser.add_argument("--cpus",            type=int, default=2)
-parser.add_argument("--mem",             type=int, default=32)
-parser.add_argument("--t",               type=str, default="08:00:00")
+parser.add_argument("--mem",             type=int, default=16)
+parser.add_argument("--t",               type=str, default="01:30:00")
 parser.add_argument("--jobs_per_group",  type=int, default=1)
 parser.add_argument("--args",            type=str, default="")
 
@@ -135,6 +135,7 @@ slurm_path    = os.path.join(os.path.dirname(total_path), "slurm", "r2", prefix)
 splits_path   = os.path.join(os.path.dirname(total_path), "inputs", "r2", "splits") # will update r2 in future rounds
 
 os.makedirs(runs_path,   exist_ok=True)
+os.makedirs(commands_path, exist_ok=True)
 os.makedirs(splits_path, exist_ok=True)
 os.makedirs(slurm_path, exist_ok=True)
 
@@ -231,7 +232,7 @@ with open(submit_script, 'w') as f:
     f.write(f"""#!/bin/bash
 #SBATCH -p gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:l40s:1
 #SBATCH -t {args.t}
 #SBATCH --mem={args.mem}G
 #SBATCH -c {args.cpus}
