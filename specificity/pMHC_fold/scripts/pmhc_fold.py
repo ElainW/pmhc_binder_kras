@@ -53,7 +53,10 @@ from alphafold.model import data
 from alphafold.model import config
 from alphafold.model import model
 from alphafold.data.tools import hhsearch
-from alphafold.relax import relax
+try:
+    from alphafold.relax import relax
+except ModuleNotFoundError:
+    relax = None
 
 from alphafold.common.protein import from_pdb_string
 from alphafold.common.residue_constants import restypes
