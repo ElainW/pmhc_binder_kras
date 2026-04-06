@@ -685,7 +685,7 @@ for index, row in df_sample.iterrows():
     allele_name_no_colon = allele_name.replace(':', '')
     temp = f'{out_dir}/{pdb_name}_{allele_name_no_colon}_{peptide_seq_query}'
     out_prefix = temp.replace("*", "")
-    print('Writing prediciton to', out_prefix)
+    print('Writing prediction to', out_prefix)
 
 
     plddts, prediction_result_dict, time = run_alphafold_prediction(pdb_name=allele_name,
