@@ -1,4 +1,6 @@
 """
+activate the conda env: dl_binder_design
+
 batch_pMHC_fold_o2.py
 
 Submits pMHC fold jobs to O2 SLURM cluster.
@@ -127,12 +129,14 @@ total_path      = os.getcwd()
 
 # ── Directory setup ───────────────────────────────────────────────────────────
 
-runs_path     = os.path.join(total_path, f"{prefix}_runs")
+runs_path     = os.path.join(os.path.dirname(total_path), "outputs", "r2", f"{prefix}_runs") # will update r2 in future rounds
 commands_path = os.path.join(total_path, f"{prefix}_commands")
-splits_path   = os.path.join(commands_path, "splits")
+slurm_path    = os.path.join(os.path.dirname(total_path), "slurm", "r2", prefix) # will update r2 in future rounds
+splits_path   = os.path.join(os.path.dirname(total_path), "inputs", "r2", "splits") # will update r2 in future rounds
 
 os.makedirs(runs_path,   exist_ok=True)
 os.makedirs(splits_path, exist_ok=True)
+os.makedirs(slurm_path, exist_ok=True)
 
 # ── Build sample dataframe ────────────────────────────────────────────────────
 
@@ -231,12 +235,12 @@ with open(submit_script, 'w') as f:
 #SBATCH -t {args.t}
 #SBATCH --mem={args.mem}G
 #SBATCH -c {args.cpus}
-#SBATCH -o {commands_path}/slurm_%A_%a.out
-#SBATCH -e {commands_path}/slurm_%A_%a.err
+#SBATCH -o {slurm_path}/slurm_%A_%a.out
+#SBATCH -e {slurm_path}/slurm_%A_%a.err
 #SBATCH -a 0-{num_jobs - 1}
 
 # Read the command for this array task
-CMD=$(sed -n "${{SLURM_ARRAY_TASK_ID}}p" {commands_list})
+CMD=$(sed -n "$((SLURM_ARRAY_TASK_ID + 1))p" {commands_list})
 eval "$CMD"
 """)
 
