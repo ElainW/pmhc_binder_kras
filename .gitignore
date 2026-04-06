@@ -43,3 +43,6 @@ specificity/ProteinMPNN_ala/inputs/
 specificity/ProteinMPNN_ala/outputs/
 specificity/pMHC_fold/scripts/__pycache__/
 specificity/pMHC_fold/outputs/
+specificity/.ipynb_checkpoints/
+specificity/pMHC_fold/scripts/.ipynb_checkpoints/
+specificity/pMHC_fold/slurm/
