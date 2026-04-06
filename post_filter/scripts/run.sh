@@ -6,6 +6,7 @@ conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
 python charge_cysteine_audit.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
     --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+    --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 
 # 2. Contact map (CPU, ~5 min for 49 designs)
