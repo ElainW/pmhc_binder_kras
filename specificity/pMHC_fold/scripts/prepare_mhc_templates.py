@@ -14,10 +14,10 @@ TEMPLATE_DIR = "/n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/pm
 
 # (pdb_id, mhc_chain, mhc_resi_start, mhc_resi_end, peptide_chain)
 STRUCTURES = [
-    ("6jtp", "A", 3, 180, "C"),
-    ("8i5c", "A", 3, 180, "C"),
-    ("8i5d", "H", 3, 180, "P"),
-    ("8i5e", "H", 3, 180, "P"),
+    ("6jtp", "A", 1, 181, "C"),
+    ("8i5c", "A", 1, 181, "C"),
+    ("8i5d", "H", 1, 181, "P"),
+    ("8i5e", "H", 1, 181, "P"),
 ]
 
 THREE_TO_ONE = {
