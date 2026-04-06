@@ -526,7 +526,7 @@ for index, row in df_sample.iterrows():
         assert query_sequence == minibinder_seq + mhc_seq + peptide_seq_query
 
         query_structure_path = minib_query_structures + pdb_name + '.pdb'
-        mhc_structure_filename = [filename for filename in os.listdir(mhc_template_dir) if filename.startswith(template_pdbid) and filename.endswith('.pdb')][0]
+        mhc_structure_filename = [filename for filename in os.listdir(mhc_template_dir) if filename.startswith(template_pdbid + "_prep") and filename.endswith('.pdb')][0]
         mhc_structure_path = os.path.join(mhc_template_dir, mhc_structure_filename)
 
 
