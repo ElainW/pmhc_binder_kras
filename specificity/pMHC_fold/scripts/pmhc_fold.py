@@ -144,8 +144,11 @@ def run_alphafold_prediction(pdb_name: str,
         **pipeline.make_sequence_features(sequence=query_sequence,
                                           description="none",
                                           num_res=len(query_sequence)),
-        **pipeline.make_msa_features(msas=[msa],
-                                     deletion_matrices=[deletion_matrix]),
+        **pipeline.make_msa_features(msas=[parsers.Msa(
+                                        sequences=msa,
+                                        deletion_matrix=deletion_matrix,
+                                        descriptions=[''] * len(msa)
+                                    )]),
         **template_features
     }
 
