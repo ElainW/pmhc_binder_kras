@@ -37,6 +37,7 @@ from pyrosetta.rosetta.core.scoring.constraints import (
 from pyrosetta.rosetta.core.id import AtomID
 from pyrosetta.rosetta.numeric import xyzVector_double_t
 from pyrosetta.rosetta.core.scoring.func import HarmonicFunc
+from pyrosetta.rosetta.protocols.simple_moves import VirtualRootMover
 
 DELTA_PAE_CUTOFF = -0.5
 
@@ -45,26 +46,49 @@ DELTA_PAE_CUTOFF = -0.5
 
 def add_coordinate_constraints(pose, coord_cst_weight: float = 1.0):
     """
-    Add harmonic coordinate constraints on all Cα atoms to prevent
-    large backbone deviations during FastRelax.
-    Weight=1.0 matches BindCraft default.
-    """
-    cst_set  = ConstraintSet()
-    ref_pose = pose.clone()
+    Add harmonic Cα coordinate constraints to prevent large backbone deviations
+    during FastRelax.
 
+    CoordinateConstraint requires an anchor atom that has an absolute position in
+    Cartesian space. The standard anchor is the ORIG virtual atom on the fold-tree
+    root, but that atom only exists if the root residue is a VRT residue.
+    Real protein residues (e.g. THR:NtermProteinFull) do not carry ORIG, so
+    anchoring to the fold-tree root directly raises:
+        "ResidueType THR:NtermProteinFull does not have an atom ORIG"
+
+    Fix: prepend a virtual root residue with VirtualRootMover before adding
+    constraints, then use that VRT residue (always the last residue after
+    prepending) as the anchor. VirtualRootMover::apply() reroots the fold tree
+    on the new VRT, so fold_tree().root() correctly returns it afterward.
+    """
+    # Prepend a virtual root — gives us a residue with ORIG / VRTBB atoms
+    vrt_mover = VirtualRootMover()
+    vrt_mover.set_removable(True)   # can be stripped before scoring/output
+    vrt_mover.apply(pose)
+
+    vrt_pos = pose.fold_tree().root()   # VRT is always the fold-tree root
+    vrt_res = pose.residue(vrt_pos)
+
+    # Choose anchor atom: ORIG exists on VRT residues; fall back to first atom
+    if vrt_res.has('ORIG'):
+        anchor_atom_idx = vrt_res.atom_index('ORIG')
+    else:
+        anchor_atom_idx = 1
+    anchor_id = AtomID(anchor_atom_idx, vrt_pos)
+
+    ref_pose = pose.clone()
+    cst_set  = ConstraintSet()
+
+    # Constrain every Cα in the (non-virtual) protein residues
     for i in range(1, pose.total_residue() + 1):
         res = pose.residue(i)
-        if not res.has('CA'):
+        if res.is_virtual_residue() or not res.has('CA'):
             continue
         ca_id  = AtomID(res.atom_index('CA'), i)
-        vrt_id = AtomID(
-            pose.residue(pose.fold_tree().root()).atom_index('ORIG'),
-            pose.fold_tree().root()
-        )
         ca_xyz = ref_pose.residue(i).xyz('CA')
         target = xyzVector_double_t(ca_xyz.x, ca_xyz.y, ca_xyz.z)
         func   = HarmonicFunc(0.0, coord_cst_weight)
-        cst    = CoordinateConstraint(ca_id, vrt_id, target, func)
+        cst    = CoordinateConstraint(ca_id, anchor_id, target, func)
         cst_set.add_constraint(cst)
 
     pose.add_constraints(cst_set)
