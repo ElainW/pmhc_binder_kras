@@ -8,7 +8,7 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 
 Contact definitions matching PyMOL conventions:
   all_contacts:        any heavy atom pair < 4.0 Å  (PyMOL mode=0)
-  polar_contacts:      N/O donor-acceptor pair < 3.5 Å  (PyMOL mode=2 approximation)
+  polar_contacts:      N/O donor-acceptor pair < 4 Å  (PyMOL mode=2 approximation)
   hydrophobic_contacts: peptide residue is hydrophobic AND any heavy atom pair < 4.0 Å
 
 Usage:
