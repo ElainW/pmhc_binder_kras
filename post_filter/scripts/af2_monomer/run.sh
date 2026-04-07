@@ -11,7 +11,7 @@ python prepare_af2_monomer_inputs.py \
 
 # 2. Chunk the fasta
 python split_fasta_chunks.py \
-    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer_inputs.fasta \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/af2_monomer_inputs.fasta \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_chunks/ \
     --chunk_size 5
 

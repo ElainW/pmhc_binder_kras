@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
 #SBATCH -c 4
-#SBATCH -o /n/groups/marks/users/aaron/pmhc/post_filter/logs/af2_monomer_%a.log
-#SBATCH -e /n/groups/marks/users/aaron/pmhc/post_filter/logs/af2_monomer_%a.err
+#SBATCH -o /n/groups/marks/users/aaron/pmhc/post_filter/slurm/af2_monomer_%a.log
+#SBATCH -e /n/groups/marks/users/aaron/pmhc/post_filter/slurm/af2_monomer_%a.err
 
 # -------------------------------------------------------
 # AF2 Monomer — SLURM array job (Round 2 post-filter)
