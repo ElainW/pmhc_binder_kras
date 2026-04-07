@@ -47,3 +47,6 @@ specificity/.ipynb_checkpoints/
 specificity/pMHC_fold/scripts/.ipynb_checkpoints/
 specificity/pMHC_fold/slurm/
 specificity/analysis/r2/
+
+post_filter/inputs
+post_filter/outputs
