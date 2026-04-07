@@ -30,82 +30,48 @@ from pyrosetta import pose_from_pdb
 from pyrosetta.rosetta.protocols.relax import FastRelax
 from pyrosetta.rosetta.protocols.analysis import InterfaceAnalyzerMover
 from pyrosetta.rosetta.core.scoring import ScoreFunctionFactory
-from pyrosetta.rosetta.core.scoring.constraints import (
-    CoordinateConstraint,
-    ConstraintSet,
-)
-from pyrosetta.rosetta.core.id import AtomID
-from pyrosetta.rosetta.numeric import xyzVector_double_t
-from pyrosetta.rosetta.core.scoring.func import HarmonicFunc
-from pyrosetta.rosetta.protocols.simple_moves import VirtualRootMover
 
 DELTA_PAE_CUTOFF = -0.5
 
 
 # ── Rosetta helpers ───────────────────────────────────────────────────────────
 
-def add_coordinate_constraints(pose, coord_cst_weight: float = 1.0):
-    """
-    Add harmonic Cα coordinate constraints to prevent large backbone deviations
-    during FastRelax.
-
-    CoordinateConstraint requires an anchor atom that has an absolute position in
-    Cartesian space. The standard anchor is the ORIG virtual atom on the fold-tree
-    root, but that atom only exists if the root residue is a VRT residue.
-    Real protein residues (e.g. THR:NtermProteinFull) do not carry ORIG, so
-    anchoring to the fold-tree root directly raises:
-        "ResidueType THR:NtermProteinFull does not have an atom ORIG"
-
-    Fix: prepend a virtual root residue with VirtualRootMover before adding
-    constraints, then use that VRT residue (always the last residue after
-    prepending) as the anchor. VirtualRootMover::apply() reroots the fold tree
-    on the new VRT, so fold_tree().root() correctly returns it afterward.
-    """
-    # Prepend a virtual root — gives us a residue with ORIG / VRTBB atoms
-    vrt_mover = VirtualRootMover()
-    vrt_mover.set_removable(True)   # can be stripped before scoring/output
-    vrt_mover.apply(pose)
-
-    vrt_pos = pose.fold_tree().root()   # VRT is always the fold-tree root
-    vrt_res = pose.residue(vrt_pos)
-
-    # Choose anchor atom: ORIG exists on VRT residues; fall back to first atom
-    if vrt_res.has('ORIG'):
-        anchor_atom_idx = vrt_res.atom_index('ORIG')
-    else:
-        anchor_atom_idx = 1
-    anchor_id = AtomID(anchor_atom_idx, vrt_pos)
-
-    ref_pose = pose.clone()
-    cst_set  = ConstraintSet()
-
-    # Constrain every Cα in the (non-virtual) protein residues
-    for i in range(1, pose.total_residue() + 1):
-        res = pose.residue(i)
-        if res.is_virtual_residue() or not res.has('CA'):
-            continue
-        ca_id  = AtomID(res.atom_index('CA'), i)
-        ca_xyz = ref_pose.residue(i).xyz('CA')
-        target = xyzVector_double_t(ca_xyz.x, ca_xyz.y, ca_xyz.z)
-        func   = HarmonicFunc(0.0, coord_cst_weight)
-        cst    = CoordinateConstraint(ca_id, anchor_id, target, func)
-        cst_set.add_constraint(cst)
-
-    pose.add_constraints(cst_set)
-
-
 def run_fastrelax(pose, scorefxn, n_repeats: int = 3):
-    """Run FastRelax with coordinate constraints active."""
+    """
+    Run FastRelax with backbone coordinate constraints.
+
+    fr.constrain_relax_to_start_coords(True) tells FastRelax to internally add
+    harmonic Cα coordinate constraints before the first minimisation cycle.
+    This requires no VRT anchor atom and is stable across PyRosetta versions.
+    The coordinate_constraint score term weight must be set in scorefxn (done
+    in main()) for these constraints to have effect.
+    """
     fr = FastRelax(scorefxn_in=scorefxn, standard_repeats=n_repeats)
     fr.constrain_relax_to_start_coords(True)
     fr.apply(pose)
     return pose
 
 
+def _iam_get(iam, *method_names, default=np.nan):
+    """Try method names in order; return first that exists and doesn't raise."""
+    for name in method_names:
+        fn = getattr(iam, name, None)
+        if fn is None:
+            continue
+        try:
+            return fn()
+        except Exception:
+            continue
+    return default
+
+
 def compute_interface_scores(pose, interface: str = 'A_B') -> dict:
     """
-    Run InterfaceAnalyzerMover to get dG, dSASA, shape complementarity.
-    'A_B': chain A (binder) vs chain B (MHC+peptide).
+    Run InterfaceAnalyzerMover for chain A (binder) vs chain B (MHC+peptide).
+
+    Method names differ across PyRosetta builds; _iam_get() tries alternatives
+    in order so the script is robust to version differences:
+      shape complementarity: get_interface_sc() (newer) or get_shape_complementarity() (older)
     """
     iam = InterfaceAnalyzerMover(interface)
     iam.set_compute_packstat(True)
@@ -114,6 +80,9 @@ def compute_interface_scores(pose, interface: str = 'A_B') -> dict:
     iam.set_pack_separated(False)
     iam.apply(pose)
 
+    dG    = _iam_get(iam, 'get_interface_dG',         default=np.nan)
+    dSASA = _iam_get(iam, 'get_interface_delta_sasa',  default=np.nan)
+
     n_iface_res = 0
     try:
         n_iface_res = iam.get_interface_residues().size()
@@ -121,13 +90,15 @@ def compute_interface_scores(pose, interface: str = 'A_B') -> dict:
         pass
 
     return {
-        'dG':                   iam.get_interface_dG(),
-        'dSASA':                iam.get_interface_delta_sasa(),
-        'dG_per_dSASA':         iam.get_interface_dG() / max(iam.get_interface_delta_sasa(), 1e-6),
-        'n_interface_residues': n_iface_res,
-        'packstat':             iam.get_interface_packstat(),
-        'shape_complementarity': iam.get_shape_complementarity(),
-        'n_hbonds':             iam.get_interface_Hbond_num(),
+        'dG':                    dG,
+        'dSASA':                 dSASA,
+        'dG_per_dSASA':          dG / max(dSASA, 1e-6) if not (np.isnan(dG) or np.isnan(dSASA)) else np.nan,
+        'n_interface_residues':  n_iface_res,
+        'packstat':              _iam_get(iam, 'get_interface_packstat',   default=np.nan),
+        # get_interface_sc() in newer builds, get_shape_complementarity() in older
+        'shape_complementarity': _iam_get(iam, 'get_interface_sc',
+                                                'get_shape_complementarity', default=np.nan),
+        'n_hbonds':              _iam_get(iam, 'get_interface_Hbond_num',  default=np.nan),
     }
 
 
@@ -185,8 +156,7 @@ def main():
             # Score before relaxation
             score_before = scorefxn(pose)
 
-            # Add coordinate constraints and relax
-            add_coordinate_constraints(pose, coord_cst_weight=1.0)
+            # Relax with internal Cα coordinate constraints
             pose = run_fastrelax(pose, scorefxn, n_repeats=args.n_repeats)
 
             # Score after relaxation without constraint term
