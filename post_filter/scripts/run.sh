@@ -35,7 +35,7 @@ python prepare_af2_monomer_inputs.py \
     --author_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/
 
-# 5. FastRelax (CPU with PyRosetta, ~5-10 min per design)
+# 5. FastRelax (CPU with PyRosetta, ~2 min per design)
 # Run on a CPU node — no GPU needed
 python fastrelax_designs.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
