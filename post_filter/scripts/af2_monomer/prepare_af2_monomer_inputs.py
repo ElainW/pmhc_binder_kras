@@ -47,9 +47,10 @@ def main():
     parser.add_argument('--merged_scores', required=True)
     parser.add_argument('--pdb_dir',       required=True)
     parser.add_argument('--author_csv',   required=True)
-    parser.add_argument('--out_dir',        required=True)
+    parser.add_argument('--out_fasta',        required=True)
     args = parser.parse_args()
 
+    out_dir = os.path.dirname(args.out_fasta)
     os.makedirs(args.out_dir, exist_ok=True)
 
     # ── 1. Your 49 designs ───────────────────────────────────────────────────
@@ -92,7 +93,7 @@ def main():
     all_records = your_records + author_records
     total = len(all_records)
 
-    fasta_path = os.path.join(args.out_dir, 'af2_monomer_inputs.fasta')
+    fasta_path = args.out_fasta
     with open(fasta_path, 'w') as f:
         for rec in all_records:
             f.write(f">{rec['name']}\n{rec['sequence']}\n")
