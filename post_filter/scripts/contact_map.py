@@ -29,7 +29,7 @@ DELTA_PAE_CUTOFF         = -0.5
 PEPTIDE_SEQ              = 'VVGADGVGK'
 PEPTIDE_LEN              = 9
 ALL_CONTACT_DIST         = 4.0   # Å — any heavy atom (PyMOL mode=0)
-POLAR_CONTACT_DIST       = 3.5   # Å — N/O donor-acceptor (PyMOL mode=2)
+POLAR_CONTACT_DIST       = 4.0   # Å — N/O donor-acceptor (PyMOL mode=2), also include salt bridges
 HYDROPHOBIC_CONTACT_DIST = 4.0   # Å — hydrophobic residue contact
 
 # Polar atom elements for H-bond donor/acceptor detection
@@ -268,6 +268,20 @@ def main():
         contacts_p5_all   = sum(1 for (_, pi, *_) in all_cts   if pi == 4)
         contacts_p5_polar = sum(1 for (_, pi, *_) in polar_cts if pi == 4)
         contacts_p5_hydro = sum(1 for (_, pi, *_) in hydro_cts if pi == 4)
+
+        # Salt bridges at p5: binder Arg or Lys polar-contacting D12 (Asp)
+        # These are the strongest G12D-vs-WT specificity determinants because
+        # G12 WT (Gly) has no carboxylate to accept this interaction.
+        SALT_BRIDGE_AA = {'R', 'K'}
+        p5_sb_contacts = [
+            (bi, pi, dist, b_at, p_at, b_aa, p_aa)
+            for (bi, pi, dist, b_at, p_at, b_aa, p_aa) in polar_cts
+            if pi == 4 and b_aa in SALT_BRIDGE_AA
+        ]
+        n_p5_saltbridge     = len(p5_sb_contacts)
+        p5_sb_binder_resnums = sorted(set(binder_res[bi].id[1] for (bi, *_) in p5_sb_contacts))
+        p5_sb_binder_aas    = [b_aa for (*_, b_aa, _) in p5_sb_contacts]
+
         summary_rows.append({
             'design':                        design,
             'binder_len':                    n_binder,
@@ -278,6 +292,9 @@ def main():
             'n_contacts_p5_all':             contacts_p5_all,
             'n_contacts_p5_polar':           contacts_p5_polar,
             'n_contacts_p5_hydro':           contacts_p5_hydro,
+            'n_p5_saltbridge':               n_p5_saltbridge,
+            'p5_sb_binder_resnums':          str(p5_sb_binder_resnums),
+            'p5_sb_binder_aas':              str(p5_sb_binder_aas),
             'binder_res_in_contact':         len(set(bi for (bi, *_) in all_cts)),
             'pep_positions_contacted_all':   sorted(set(pi + 1 for (_, pi, *_) in all_cts)),
             'pep_positions_contacted_polar': sorted(set(pi + 1 for (_, pi, *_) in polar_cts)),
@@ -375,6 +392,16 @@ def main():
          'n_contacts_p5_all', 'n_contacts_p5_polar', 'n_contacts_p5_hydro']
     ]
     print(p5_polar.to_string(index=False))
+
+    print(f"\n── Designs with Arg/Lys salt bridge at p5 (strongest G12D specificity) ──")
+    p5_sb = summary_df[summary_df['n_p5_saltbridge'] > 0][
+        ['design', 'n_p5_saltbridge', 'p5_sb_binder_resnums', 'p5_sb_binder_aas',
+         'n_contacts_p5_all', 'n_contacts_p5_polar']
+    ]
+    if len(p5_sb):
+        print(p5_sb.to_string(index=False))
+    else:
+        print("  (none — no Arg/Lys polar contact with D12 found in this set)")
 
 
 if __name__ == '__main__':
