@@ -8,3 +8,17 @@ python prepare_af2_monomer_inputs.py \
     --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
     --author_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/
+
+# 2. Chunk the fasta
+python split_fasta_chunks.py \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer_inputs.fasta \
+    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_chunks/ \
+    --chunk_size 5
+
+# 3. Submit the sbatch job
+sbatch --array=0-N run_af2_monomer_array.sh
+
+# 4. Collect the scores after the sbatch job finishes
+python collect_monomer_scores.py \
+    --monomer_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/ \
+    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
