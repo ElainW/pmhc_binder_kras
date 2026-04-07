@@ -12,22 +12,21 @@ python split_pmhc_fold_pdbs.py \
 # 1. Charge/cysteine audit (fast, CPU)
 python charge_cysteine_audit.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-    --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-    --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
+    --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 
 # 2. Contact map (CPU, ~5 min for 49 designs)
 python contact_map.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-    --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
+    --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 
 # 3. RMSD (CPU, fast)
 python compute_rmsd.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
     --af2_pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-    --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
-    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
+    --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
+    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2
 
 # 4. Prepare AF2 monomer FASTA
 python prepare_af2_monomer_inputs.py \
@@ -40,6 +39,6 @@ python prepare_af2_monomer_inputs.py \
 # Run on a CPU node — no GPU needed
 python fastrelax_designs.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-    --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
+    --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/ \
     --n_repeats 3
