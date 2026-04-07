@@ -32,7 +32,7 @@ python compute_rmsd.py \
 python prepare_af2_monomer_inputs.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
     --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-    --author_xlsx /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/science_adv0185_data_s1.xlsx \
+    --author_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/
 
 # 5. FastRelax (CPU with PyRosetta, ~5-10 min per design)

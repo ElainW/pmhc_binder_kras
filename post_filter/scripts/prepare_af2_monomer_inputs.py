@@ -11,7 +11,7 @@ Usage:
     python prepare_af2_monomer_inputs.py \
         --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
         --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --author_xlsx /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/science_adv0185_data_s1.xlsx \
+        --author_csv /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/science_adv0185_data_s1.csv \
         --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 """
 
@@ -46,7 +46,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--merged_scores', required=True)
     parser.add_argument('--pdb_dir',       required=True)
-    parser.add_argument('--author_xlsx',   required=True)
+    parser.add_argument('--author_csv',   required=True)
     parser.add_argument('--out_dir',        required=True)
     args = parser.parse_args()
 
@@ -68,12 +68,9 @@ def main():
         your_records.append({'name': design, 'sequence': seq, 'source': 'your_designs'})
 
     # ── 2. Author sequences from xlsx ────────────────────────────────────────
-    print("Loading author sequences from xlsx...")
-    raw = pd.read_excel(args.author_xlsx, sheet_name=0, header=None)
-    # Row 0 is the header row
-    header = raw.iloc[0].tolist()
-    data   = raw.iloc[1:].copy()
-    data.columns = header
+    print("Loading author sequences from csv...")
+    data = pd.read_csv(args.author_csv)
+    print(data)
 
     name_col = 'Binder name'
     seq_col  = 'Amino acid sequence'
