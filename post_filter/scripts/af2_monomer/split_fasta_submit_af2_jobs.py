@@ -26,6 +26,6 @@ with open(sys.argv[1], 'r') as fasta_seq:
 				pdb_f = af2_output_dir + "/" + seq_id + '/' + 'ranked_4.pdb'
 				# print(pdb_f)
 				if not os.path.isfile(pdb_f):
-					cmd = f"sbatch -o {slurm_dir}/{seq_id}-%j.out -e {slurm_dir}/{seq_id}-%j.err -J {seq_id}_AF2 get_AF2_structures.sh {output_file} {max_template_date} {overall_dir}"
+					cmd = f"sbatch -o {slurm_dir}/{seq_id}-%j.out -e {slurm_dir}/{seq_id}-%j.err -J {seq_id}_AF2 get_AF2_structures.sh {output_file} {max_template_date} {af2_output_dir}"
 					run_cmd_small_output(cmd)
 			i += 1
