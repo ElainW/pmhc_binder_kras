@@ -2,7 +2,8 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
 #SBATCH --account=marks
-#SBATCH -p gpu_quad
+#SBATCH -p gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
 #SBATCH -t 4:00:00 # usually 32 hours
 #SBATCH --mem=25GB # usually 50GB
 #SBATCH --exclude=compute-g-17-166,compute-g-17-167,compute-g-17-168,compute-g-17-169,compute-g-17-170,compute-g-17-171,compute-g-17-200,compute-g-17-201,compute-g-17-202,compute-g-17-203,compute-g-17-204,compute-g-17-205
