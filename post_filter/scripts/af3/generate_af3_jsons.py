@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 Usage:
-python generate_af3_jsons.py /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta
+python generate_af3_jsons.py \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta
+    --output_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/af3
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design (e.g. author_mage-282) becomes one JSON file with chains A, B, C.
