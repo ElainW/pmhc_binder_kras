@@ -22,5 +22,4 @@ alphafold.py \
 --db_preset=full_dbs \
 --model_preset='monomer' \
 --output_dir=${output_dir} \
---data_dir=/n/shared_db/alphafold-2.3/ \
---no_run_relax
+--data_dir=/n/shared_db/alphafold-2.3/
