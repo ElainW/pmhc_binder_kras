@@ -126,7 +126,7 @@ def main():
 
     for name, chains in sorted(designs.items()):
         if name != "mage-282":
-            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_file}/{name}.json {max_template_date}"
+            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_dir}/{name}.json {max_template_date}"
             result = subprocess.run(cmd1, capture_output=True, text=True, check=True)
             job_id = result.stdout.strip()
 
