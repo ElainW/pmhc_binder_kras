@@ -3,7 +3,7 @@
 Usage:
 python generate_af3_jsons.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
-    --output_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/af3
+    --output_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design (e.g. author_mage-282) becomes one JSON file with chains A, B, C.
@@ -25,7 +25,7 @@ def parse_fasta(fasta):
     current_seq_lines = []
 
     with open(fasta, 'r') as fasta_text:
-        for line in fasta_text.strip().splitlines():
+        for line in fasta_text:
             line = line.strip()
             if not line:
                 continue
@@ -86,6 +86,7 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
     FASTA = args.fasta
+    global MODEL_SEEDS
     MODEL_SEEDS = [1, 2, 3, 4, 5]
 
     designs = parse_fasta(FASTA)
