@@ -3,11 +3,15 @@
 Usage:
 python generate_af3_jsons.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
-    --output_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3
+    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
+    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
+    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design (e.g. author_mage-282) becomes one JSON file with chains A, B, C.
 All three chains (binder, MHC, peptide) are typed as "protein".
+
+Sbatch AlphaFold3 sbatch jobs: split into two parts: MSA generation and inference
 """
 
 import json
@@ -16,6 +20,9 @@ import sys
 import re
 from collections import defaultdict
 import argparse
+import subprocess
+
+from cmd_runner import *
 
 
 def parse_fasta(fasta):
@@ -32,6 +39,7 @@ def parse_fasta(fasta):
             if line.startswith(">"):
                 if current_header is not None:
                     name, chain = parse_header(current_header)
+                    name = name.removeprefix("author_")
                     designs[name][chain] = "".join(current_seq_lines)
                 current_header = line[1:]
                 current_seq_lines = []
@@ -80,11 +88,19 @@ def build_json(name, chains):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fasta', required=True)
-    parser.add_argument('--output_dir',       required=True)
+    parser.add_argument('--output_json_dir',       required=True)
+    parser.add_argument('--output_prediction_dir',       required=True)
+    parser.add_argument('--output_slurm_dir',       required=True)
+    parser.add_argument('--max_template_date',     default='2026-04-07')
 
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.output_json_dir, exist_ok=True)
+    os.makedirs(args.output_prediction_dir, exist_ok=True)
+    os.makedirs(args.output_slurm_dir, exist_ok=True)
+    output_json_dir = args.output_json_dir
+    output_prediction_dir = args.output_prediction_dir
+    slurm_dir = args.output_slurm_dir
     FASTA = args.fasta
     global MODEL_SEEDS
     MODEL_SEEDS = [1, 2, 3, 4, 5]
@@ -95,14 +111,26 @@ def main():
 
     for name, chains in sorted(designs.items()):
         data = build_json(name, chains)
-        out_path = os.path.join(args.output_dir, f"{name}.json")
+        out_path = os.path.join(output_json_dir, f"{name}.json")
         with open(out_path, "w") as f:
             json.dump(data, f, indent=2)
         # Quick sanity: print chain lengths
         lens = {c: len(s) for c, s in chains.items()}
         print(f"  {name}.json  (A={lens['A']}, B={lens['B']}, C={lens['C']})")
 
-    print(f"\nDone. {len(designs)} JSON files written to {args.output_dir}")
+    print(f"\nDone. {len(designs)} JSON files written to {output_json_dir}")
+
+    for name, chains in sorted(designs.items()):
+        cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_file}/{name}.json {max_template_date}"
+        result = subprocess.run(cmd1, capture_output=True, text=True, check=True)
+        job_id = result.stdout.strip()
+
+        print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
+
+        cmd2 = f"sbatch --dependency=afterok:{job_id} -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
+        run_cmd_small_output(cmd2)
+
+        print(f"AF3 inference job submitted for {name} with dependency on {job_id}")
 
 
 if __name__ == "__main__":
