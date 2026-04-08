@@ -7,9 +7,9 @@ from cmd_runner import *
 # print(sys.argv[1], sys.argv[2], sys.argv[3])
 with open(sys.argv[1], 'r') as fasta_seq:
 	fasta_output_dir = sys.argv[2]
-    af2_output_dir = sys.argv[3]
+	af2_output_dir = sys.argv[3]
 	slurm_dir = sys.argv[4]
-    max_template_date = sys.argv[5]
+	max_template_date = sys.argv[5]
 	i = 0
 	output_file = ''
 	seq_id = ''
@@ -26,6 +26,6 @@ with open(sys.argv[1], 'r') as fasta_seq:
 				pdb_f = af2_output_dir + "/" + seq_id + '/' + 'ranked_4.pdb'
 				# print(pdb_f)
 				if not os.path.isfile(pdb_f):
-					cmd = f"sbatch -o {slurm_dir}/{seq_id}-%j.out -e {slurm_dir}/{seq_id}-%j.err -J {seq_id}_AF2 af2_monomer/get_AF2_structures.sh {output_file} {max_template_date} {overall_dir}"
+					cmd = f"sbatch -o {slurm_dir}/{seq_id}-%j.out -e {slurm_dir}/{seq_id}-%j.err -J {seq_id}_AF2 get_AF2_structures.sh {output_file} {max_template_date} {overall_dir}"
 					run_cmd_small_output(cmd)
 			i += 1
