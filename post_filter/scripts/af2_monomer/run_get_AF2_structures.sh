@@ -11,9 +11,4 @@ export max_template_date=$5 # can put in the date when you run AF2
 mkdir -p ${af2_output_dir}
 mkdir -p ${slurm_dir}
 
-if [ ! -f ${fasta_sequence} ]; do
-    echo "No fasta sequence found! Exiting..."
-    exit 1
-fi
-
 python3 split_fasta_submit_af2_jobs.py ${fasta_sequence} ${fasta_output_dir} ${af2_output_dir} ${slurm_dir} ${max_template_date}
