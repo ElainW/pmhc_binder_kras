@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
 Usage:
-python generate_af3_jsons.py \
+module load conda/miniforge3/24.11.3-0
+conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+
+python generate_af3_jobs.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
     --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
@@ -38,8 +41,8 @@ def parse_fasta(fasta):
                 continue
             if line.startswith(">"):
                 if current_header is not None:
-                    name, chain = parse_header(current_header)
-                    name = name.removeprefix("author_")
+                    name_tmp, chain = parse_header(current_header)
+                    name = name_tmp.removeprefix("author_")
                     designs[name][chain] = "".join(current_seq_lines)
                 current_header = line[1:]
                 current_seq_lines = []
@@ -48,7 +51,8 @@ def parse_fasta(fasta):
 
     # Save last entry
     if current_header is not None:
-        name, chain = parse_header(current_header)
+        name_tmp, chain = parse_header(current_header)
+        name = name_tmp.removeprefix("author_")
         designs[name][chain] = "".join(current_seq_lines)
 
     return designs
@@ -121,16 +125,19 @@ def main():
     print(f"\nDone. {len(designs)} JSON files written to {output_json_dir}")
 
     for name, chains in sorted(designs.items()):
-        cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_file}/{name}.json {max_template_date}"
-        result = subprocess.run(cmd1, capture_output=True, text=True, check=True)
-        job_id = result.stdout.strip()
+        if name != "mage-282":
+            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_file}/{name}.json {max_template_date}"
+            result = subprocess.run(cmd1, capture_output=True, text=True, check=True)
+            job_id = result.stdout.strip()
 
-        print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
+            print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
 
-        cmd2 = f"sbatch --dependency=afterok:{job_id} -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
-        run_cmd_small_output(cmd2)
+            cmd2 = f"sbatch --dependency=afterok:{job_id} -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
+            run_cmd_small_output(cmd2)
 
-        print(f"AF3 inference job submitted for {name} with dependency on {job_id}")
+            print(f"AF3 inference job submitted for {name} with dependency on {job_id}")
+        else:
+            print("Skipping mage-282")
 
 
 if __name__ == "__main__":
