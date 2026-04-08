@@ -2,7 +2,7 @@
 """
 Usage:
 python generate_af3_jsons.py \
-    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
     --output_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/af3
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
