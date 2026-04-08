@@ -105,6 +105,7 @@ def main():
     output_json_dir = args.output_json_dir
     output_prediction_dir = args.output_prediction_dir
     slurm_dir = args.output_slurm_dir
+    max_template_date = args.max_template_date
     FASTA = args.fasta
     global MODEL_SEEDS
     MODEL_SEEDS = [1, 2, 3, 4, 5]
@@ -126,8 +127,8 @@ def main():
 
     for name, chains in sorted(designs.items()):
         if name != "mage-282":
-            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_dir}/{name}.json {max_template_date}"
-            result = subprocess.run(cmd1, capture_output=True, text=True, check=True)
+            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_dir} {max_template_date}"
+            result = subprocess.run(cmd1, capture_output=True, text=True, check=True, shell=True)
             job_id = result.stdout.strip()
 
             print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
