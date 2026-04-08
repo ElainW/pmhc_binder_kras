@@ -9,7 +9,7 @@
 
 # troubleshoot https://harvardmed.atlassian.net/wiki/spaces/O2/pages/1995177985/Using+AlphaFold+2+on+O2
 # find the l40s gpus in gpu_quad, sinfo --Format=nodehost,available,memory,statelong,gres:40 -p gpu_quad | grep "l40s"
-alphafold/2.3.2-020cd6d
+module load alphafold/2.3.2-020cd6d
 
 export fasta_sequence=$1
 export max_template_date=$2
