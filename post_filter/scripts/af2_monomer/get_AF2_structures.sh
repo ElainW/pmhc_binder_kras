@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --account=marks
 #SBATCH -p gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
 #SBATCH -t 4:00:00 # usually 32 hours
