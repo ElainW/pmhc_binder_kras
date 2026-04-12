@@ -51,3 +51,5 @@ specificity/analysis/r2/
 post_filter/inputs
 post_filter/outputs
 post_filter/scripts/af2_monomer/__pycache__/
+post_filter/scripts/af3/__pycache__/
+post_filter/slurm/
