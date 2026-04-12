@@ -12,6 +12,6 @@ export name=$1
 export output_predction_dir=$2
 
 run_alphafold.py \
-    --output_dir=${output_predction_dir} \
-    --json_path=${output_predction_dir}/${name}_data.json \
+    --output_dir=${output_prediction_dir} \
+    --json_path=${output_predction_dir}/${name}/${name}_data.json \
     --norun_data_pipeline
