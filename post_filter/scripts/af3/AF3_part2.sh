@@ -9,7 +9,7 @@
 module load alphafold/3.0.1
 
 export name=$1
-export output_predction_dir=$2
+export output_prediction_dir=$2
 
 run_alphafold.py \
     --output_dir=${output_prediction_dir} \
