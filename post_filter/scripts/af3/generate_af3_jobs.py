@@ -133,6 +133,8 @@ def main():
 
             print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
 
+#             cmd2 = f"sbatch -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
+#             print(f"AF3 inference job submitted for {name}")
             cmd2 = f"sbatch --dependency=afterok:{job_id} -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
             run_cmd_small_output(cmd2)
 
