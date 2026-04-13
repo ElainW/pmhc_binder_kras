@@ -73,12 +73,21 @@ def build_json(name, chains):
         seq = chains.get(chain_id)
         if seq is None:
             raise ValueError(f"Missing chain {chain_id} for design '{name}'")
-        sequences.append({
-            "protein": {
-                "id": chain_id,
-                "sequence": seq
-            }
-        })
+        if seq != 'C':
+            sequences.append({
+                "protein": {
+                    "id": chain_id,
+                    "sequence": seq
+                }
+            })
+        else: # skip HMM search for peptide
+            sequences.append({
+                "protein": {
+                    "id": chain_id,
+                    "sequence": seq,
+                    "templates": []
+                }
+            })
 
     return {
         "name": name,
@@ -91,11 +100,12 @@ def build_json(name, chains):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--fasta', required=True)
-    parser.add_argument('--output_json_dir',       required=True)
-    parser.add_argument('--output_prediction_dir',       required=True)
-    parser.add_argument('--output_slurm_dir',       required=True)
-    parser.add_argument('--max_template_date',     default='2026-04-07')
+    parser.add_argument('--fasta', required=True, help="Fasta file containing all the sequence input to AF3. Each complex should be separated into chain A: minibinder, chain B: truncated MHC, chain C: peptide")
+    parser.add_argument('--output_json_dir', required=True, help="output directory of json file, which is required as input to AF3 run")
+    parser.add_argument('--output_prediction_dir', required=True, help="output directory of all AF3 output. A subdirectory will be created with the sample name")
+    parser.add_argument('--output_slurm_dir', required=True, help="directory to write slurm .out and .err files")
+    parser.add_argument('--max_template_date', default='2026-04-07', help="maximum template date for AF3 to look up similar sequences in AFDB")
+    parser.add_argument('--skip', nargs='*', help="sample names to skip. e.g. mage-282")
 
     args = parser.parse_args()
 
@@ -107,6 +117,7 @@ def main():
     slurm_dir = args.output_slurm_dir
     max_template_date = args.max_template_date
     FASTA = args.fasta
+    sample_to_skip = args.skip
     global MODEL_SEEDS
     MODEL_SEEDS = [1, 2, 3, 4, 5]
 
@@ -125,11 +136,11 @@ def main():
 
     print(f"\nDone. {len(designs)} JSON files written to {output_json_dir}")
 
-    for name, chains in sorted(designs.items()):
-        if name != "mage-282":
+    for name, _ in sorted(designs.items()):
+        if name not in sample_to_skip:
             cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_dir} {max_template_date}"
             result = subprocess.run(cmd1, capture_output=True, text=True, check=True, shell=True)
-            job_id = result.stdout.strip()
+            job_id = result.stdout.strip().split(' ')[-1]
 
             print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
 
@@ -140,7 +151,7 @@ def main():
 
             print(f"AF3 inference job submitted for {name} with dependency on {job_id}")
         else:
-            print("Skipping mage-282")
+            print(f"Skipping {name}")
 
 
 if __name__ == "__main__":
