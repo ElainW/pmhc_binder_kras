@@ -8,7 +8,8 @@ python generate_af3_jobs.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
     --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
-    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/
+    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --skip ctnnb1-15 gp100-3 hiv-9 hiv-10 mage-4 mage-282 mage-513 mart1-3 mart1-43 pap-116 phox2b-5 phox2b-11 sars-6 wt1-5 wt1-8 yfv-2
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design (e.g. author_mage-282) becomes one JSON file with chains A, B, C.
@@ -73,7 +74,7 @@ def build_json(name, chains):
         seq = chains.get(chain_id)
         if seq is None:
             raise ValueError(f"Missing chain {chain_id} for design '{name}'")
-        if seq != 'C':
+        if chain_id != 'C':
             sequences.append({
                 "protein": {
                     "id": chain_id,
