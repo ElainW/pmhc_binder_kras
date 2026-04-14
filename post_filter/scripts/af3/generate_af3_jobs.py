@@ -9,150 +9,245 @@ python generate_af3_jobs.py \
     --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --peptide_chain C \
     --skip ctnnb1-15 gp100-3 hiv-9 hiv-10 mage-4 mage-282 mage-513 mart1-3 mart1-43 pap-116 phox2b-5 phox2b-11 sars-6 wt1-5 wt1-8 yfv-2
 
-Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
-Each unique design (e.g. author_mage-282) becomes one JSON file with chains A, B, C.
-All three chains (binder, MHC, peptide) are typed as "protein".
+python generate_af3_jobs.py \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC_full.fasta \
+    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
+    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
+    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --peptide_chain C
 
-Sbatch AlphaFold3 sbatch jobs: split into two parts: MSA generation and inference
+Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
+Each unique design becomes one JSON file. Chain layout is flexible:
+
+  Truncated MHC (3-chain):   A = binder, B = MHC alpha, C = peptide
+  Full MHC + B2M (4-chain):  A = binder, B = MHC alpha, C = peptide, D = B2M
+
+The peptide chain (default: C) always gets "templates": [] to skip HMM search,
+which would crash on short sequences. All other chains are standard protein entries.
+
+Chains are written in sorted order (A, B, C, D, ...) regardless of FASTA order.
 """
 
 import json
 import os
-import sys
 import re
+import subprocess
 from collections import defaultdict
 import argparse
-import subprocess
 
-from cmd_runner import *
+from cmd_runner import run_cmd_small_output
 
 
-def parse_fasta(fasta):
-    """Parse multi-chain fasta → {design_name: {chain_id: sequence}}."""
-    designs = defaultdict(dict)
+# ── FASTA parsing ─────────────────────────────────────────────────────────────
+
+def parse_fasta(fasta_path: str) -> dict[str, dict[str, str]]:
+    """
+    Parse a multi-chain FASTA into {design_name: {chain_id: sequence}}.
+
+    Header format: >design_name_CHAINID
+    e.g. >author_mage-282_A  or  >author_sars-6_D
+
+    The 'author_' prefix is stripped from design names.
+    """
+    designs: dict[str, dict[str, str]] = defaultdict(dict)
     current_header = None
-    current_seq_lines = []
+    current_seq_lines: list[str] = []
 
-    with open(fasta, 'r') as fasta_text:
-        for line in fasta_text:
+    def _flush():
+        if current_header is None:
+            return
+        name_raw, chain = _parse_header(current_header)
+        name = name_raw.removeprefix("author_")
+        designs[name][chain] = "".join(current_seq_lines)
+
+    with open(fasta_path) as f:
+        for line in f:
             line = line.strip()
             if not line:
                 continue
             if line.startswith(">"):
-                if current_header is not None:
-                    name_tmp, chain = parse_header(current_header)
-                    name = name_tmp.removeprefix("author_")
-                    designs[name][chain] = "".join(current_seq_lines)
+                _flush()
                 current_header = line[1:]
                 current_seq_lines = []
             else:
                 current_seq_lines.append(line)
+    _flush()
 
-    # Save last entry
-    if current_header is not None:
-        name_tmp, chain = parse_header(current_header)
-        name = name_tmp.removeprefix("author_")
-        designs[name][chain] = "".join(current_seq_lines)
-
-    return designs
+    return dict(designs)
 
 
-def parse_header(header):
-    """Split 'author_mage-282_A' → ('author_mage-282', 'A')."""
+def _parse_header(header: str) -> tuple[str, str]:
+    """
+    Split 'author_mage-282_A' → ('author_mage-282', 'A').
+    Chain ID is the last underscore-delimited token and must be a single letter.
+    """
     match = re.match(r"^(.+)_([A-Z])$", header)
     if not match:
-        raise ValueError(f"Cannot parse header: {header}")
+        raise ValueError(
+            f"Cannot parse FASTA header: '{header}'\n"
+            f"Expected format: <design_name>_<CHAIN_LETTER>  e.g. author_mage-282_A"
+        )
     return match.group(1), match.group(2)
 
 
-def build_json(name, chains):
-    """Build the AF3 JSON dict for one design."""
+# ── JSON building ─────────────────────────────────────────────────────────────
+
+def build_json(name: str,
+               chains: dict[str, str],
+               peptide_chain: str,
+               model_seeds: list[int]) -> dict:
+    """
+    Build the AF3 input JSON for one design.
+
+    chains:        {chain_id: sequence}  — any subset of A/B/C/D/...
+    peptide_chain: chain ID that carries the short peptide (default 'C').
+                   This chain gets "templates": [] to skip HMM profile search,
+                   which crashes on sequences < ~15 residues.
+    """
+    chain_ids = sorted(chains.keys())   # deterministic order: A, B, C, D, ...
+
+    missing = [c for c in chain_ids if chains.get(c) is None]
+    if missing:
+        raise ValueError(f"Design '{name}': missing sequences for chains {missing}")
+
     sequences = []
-    for chain_id in ["A", "B", "C"]:
-        seq = chains.get(chain_id)
-        if seq is None:
-            raise ValueError(f"Missing chain {chain_id} for design '{name}'")
-        if chain_id != 'C':
-            sequences.append({
-                "protein": {
-                    "id": chain_id,
-                    "sequence": seq
-                }
-            })
-        else: # skip HMM search for peptide
-            sequences.append({
-                "protein": {
-                    "id": chain_id,
-                    "sequence": seq,
-                    "templates": []
-                }
-            })
+    for chain_id in chain_ids:
+        seq = chains[chain_id]
+        entry: dict = {"id": chain_id, "sequence": seq}
+
+        # Skip template HMM search for the peptide chain — short sequences
+        # cause hmmbuild/hmmsearch to produce empty Stockholm output, crashing
+        # AF3's parsers.convert_stockholm_to_a3m with StopIteration.
+        if chain_id == peptide_chain:
+            entry["templates"] = []
+
+        sequences.append({"protein": entry})
 
     return {
-        "name": name,
-        "modelSeeds": MODEL_SEEDS,
-        "dialect": "alphafold3",
-        "version": 1,
-        "sequences": sequences
+        "name":      name,
+        "modelSeeds": model_seeds,
+        "dialect":   "alphafold3",
+        "version":   1,
+        "sequences": sequences,
     }
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--fasta', required=True, help="Fasta file containing all the sequence input to AF3. Each complex should be separated into chain A: minibinder, chain B: truncated MHC, chain C: peptide")
-    parser.add_argument('--output_json_dir', required=True, help="output directory of json file, which is required as input to AF3 run")
-    parser.add_argument('--output_prediction_dir', required=True, help="output directory of all AF3 output. A subdirectory will be created with the sample name")
-    parser.add_argument('--output_slurm_dir', required=True, help="directory to write slurm .out and .err files")
-    parser.add_argument('--max_template_date', default='2026-04-07', help="maximum template date for AF3 to look up similar sequences in AFDB")
-    parser.add_argument('--skip', nargs='*', help="sample names to skip. e.g. mage-282")
+# ── Validation ────────────────────────────────────────────────────────────────
 
+def validate_designs(designs: dict[str, dict[str, str]],
+                     peptide_chain: str) -> None:
+    """Warn about unexpected chain layouts."""
+    for name, chains in sorted(designs.items()):
+        chain_ids = sorted(chains.keys())
+
+        if peptide_chain not in chains:
+            print(f"  WARNING: {name} — peptide chain '{peptide_chain}' not found "
+                  f"(chains present: {chain_ids})")
+
+        for chain_id, seq in chains.items():
+            if not seq:
+                print(f"  WARNING: {name} chain {chain_id} — empty sequence")
+
+        # Flag unexpectedly short non-peptide chains
+        for chain_id, seq in chains.items():
+            if chain_id != peptide_chain and len(seq) < 20:
+                print(f"  WARNING: {name} chain {chain_id} — sequence very short "
+                      f"({len(seq)} aa); consider adding to --peptide_chain or "
+                      f"checking FASTA")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument('--fasta',                required=True,
+                        help='Multi-chain FASTA. Headers: <design_name>_<CHAIN>')
+    parser.add_argument('--output_json_dir',      required=True,
+                        help='Directory for AF3 input JSON files')
+    parser.add_argument('--output_prediction_dir', required=True,
+                        help='Root output directory for AF3 predictions')
+    parser.add_argument('--output_slurm_dir',     required=True,
+                        help='Directory for SLURM .out/.err files')
+    parser.add_argument('--peptide_chain',         default='C',
+                        help='Chain ID of the peptide (default: C). '
+                             'This chain gets "templates": [] to skip HMM search.')
+    parser.add_argument('--max_template_date',    default='2026-04-07',
+                        help='Maximum template date for AF3 (default: 2026-04-07)')
+    parser.add_argument('--model_seeds',           nargs='+', type=int,
+                        default=[1, 2, 3, 4, 5],
+                        help='AF3 model seeds (default: 1 2 3 4 5)')
+    parser.add_argument('--skip',                  nargs='*', default=[],
+                        help='Design names to skip (without "author_" prefix)')
     args = parser.parse_args()
 
-    os.makedirs(args.output_json_dir, exist_ok=True)
+    os.makedirs(args.output_json_dir,       exist_ok=True)
     os.makedirs(args.output_prediction_dir, exist_ok=True)
-    os.makedirs(args.output_slurm_dir, exist_ok=True)
-    output_json_dir = args.output_json_dir
-    output_prediction_dir = args.output_prediction_dir
-    slurm_dir = args.output_slurm_dir
-    max_template_date = args.max_template_date
-    FASTA = args.fasta
-    sample_to_skip = args.skip
-    global MODEL_SEEDS
-    MODEL_SEEDS = [1, 2, 3, 4, 5]
+    os.makedirs(args.output_slurm_dir,      exist_ok=True)
 
-    designs = parse_fasta(FASTA)
-    print(f"Found {len(designs)} designs:\n  " + "\n  ".join(sorted(designs.keys())))
+    # ── Parse FASTA ───────────────────────────────────────────────────────────
+    designs = parse_fasta(args.fasta)
+    print(f"Found {len(designs)} designs:")
+    for name, chains in sorted(designs.items()):
+        lens = {c: len(s) for c, s in sorted(chains.items())}
+        lens_str = ', '.join(f"{c}={l}" for c, l in lens.items())
+        print(f"  {name}  ({lens_str})")
     print()
 
+    validate_designs(designs, args.peptide_chain)
+
+    # ── Write JSONs ───────────────────────────────────────────────────────────
     for name, chains in sorted(designs.items()):
-        data = build_json(name, chains)
-        out_path = os.path.join(output_json_dir, f"{name}.json")
+        data     = build_json(name, chains, args.peptide_chain, args.model_seeds)
+        out_path = os.path.join(args.output_json_dir, f"{name}.json")
         with open(out_path, "w") as f:
             json.dump(data, f, indent=2)
-        # Quick sanity: print chain lengths
-        lens = {c: len(s) for c, s in chains.items()}
-        print(f"  {name}.json  (A={lens['A']}, B={lens['B']}, C={lens['C']})")
 
-    print(f"\nDone. {len(designs)} JSON files written to {output_json_dir}")
+    print(f"Written {len(designs)} JSON files → {args.output_json_dir}\n")
 
-    for name, _ in sorted(designs.items()):
-        if name not in sample_to_skip:
-            cmd1 = f"sbatch -o {slurm_dir}/{name}-AF3-p1-%j.out -e {slurm_dir}/{name}-AF3-p1-%j.err -J {name}_AF3_p1 AF3_part1.sh {name} {output_prediction_dir} {output_json_dir} {max_template_date}"
-            result = subprocess.run(cmd1, capture_output=True, text=True, check=True, shell=True)
-            job_id = result.stdout.strip().split(' ')[-1]
+    # ── Submit SLURM jobs ─────────────────────────────────────────────────────
+    skip_set = set(args.skip or [])
 
-            print(f"AF3 MSA job submitted for {name}. Job ID: {job_id}")
-
-#             cmd2 = f"sbatch -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
-#             print(f"AF3 inference job submitted for {name}")
-            cmd2 = f"sbatch --dependency=afterok:{job_id} -o {slurm_dir}/{name}-AF3-p2-%j.out -e {slurm_dir}/{name}-AF3-p2-%j.err -J {name}_AF3_p2 AF3_part2.sh {name} {output_prediction_dir}"
-            run_cmd_small_output(cmd2)
-
-            print(f"AF3 inference job submitted for {name} with dependency on {job_id}")
-        else:
+    for name in sorted(designs.keys()):
+        if name in skip_set:
             print(f"Skipping {name}")
+            continue
+
+        slurm_dir   = args.output_slurm_dir
+        out_pred    = args.output_prediction_dir
+        out_json    = args.output_json_dir
+        max_tmpl    = args.max_template_date
+
+        # Part 1: MSA + template search (CPU only, --norun_inference)
+        cmd1 = (
+            f"sbatch "
+            f"-o {slurm_dir}/{name}-AF3-p1-%j.out "
+            f"-e {slurm_dir}/{name}-AF3-p1-%j.err "
+            f"-J {name}_AF3_p1 "
+            f"AF3_part1.sh {name} {out_pred} {out_json} {max_tmpl}"
+        )
+        result = subprocess.run(
+            cmd1, capture_output=True, text=True, check=True, shell=True
+        )
+        job_id = result.stdout.strip().split()[-1]
+        print(f"AF3 MSA job submitted for {name}  (job {job_id})")
+
+        # Part 2: Inference (GPU), depends on Part 1 completing successfully
+        cmd2 = (
+            f"sbatch "
+            f"--dependency=afterok:{job_id} "
+            f"-o {slurm_dir}/{name}-AF3-p2-%j.out "
+            f"-e {slurm_dir}/{name}-AF3-p2-%j.err "
+            f"-J {name}_AF3_p2 "
+            f"AF3_part2.sh {name} {out_pred}"
+        )
+        run_cmd_small_output(cmd2)
+        print(f"AF3 inference job submitted for {name}  (depends on {job_id})")
 
 
 if __name__ == "__main__":
