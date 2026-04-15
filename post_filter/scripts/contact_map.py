@@ -73,7 +73,7 @@ def compute_contacts(binder_residues: list, peptide_residues: list):
         Any heavy atom pair < 4.0 Å (PyMOL mode=0).
 
     polar_contacts:
-        N/O donor-acceptor pair < 3.5 Å (PyMOL mode=2 approximation).
+        N/O donor-acceptor pair < 4.0 Å (PyMOL mode=2 approximation).
         Reports the closest polar pair per residue pair.
 
     hydrophobic_contacts:
