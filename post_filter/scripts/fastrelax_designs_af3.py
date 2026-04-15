@@ -25,19 +25,19 @@ Scores captured (side1/side2 normalized/score excluded):
   nres_all, nres_int, packstat, per_residue_energy_int, sc_value
 
 Usage:
-    python fastrelax_af3.py \
+    python fastrelax_designs_af3.py \
         --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/ \
         --n_repeats   3
 
     # Run on a specific list of designs:
-    python fastrelax_af3.py \
+    python fastrelax_designs_af3.py \
         --af3_out_dir ... \
         --out_dir     ... \
         --designs ctnnb1-15 gp100-3 mart1-3
 
     # Inspect chain layout of one CIF before running:
-    python fastrelax_af3.py --af3_out_dir ... --out_dir ... --inspect ctnnb1-15
+    python fastrelax_designs_af3.py --af3_out_dir ... --out_dir ... --inspect ctnnb1-15
 """
 
 import os
