@@ -31,15 +31,15 @@ Reference:
 
 Usage:
     # Auto-detect chain lengths from PDB
-    python pmhci_ipsae.py design_af2pred_pae.npy \\
+    python calc_ipsae.py design_af2pred_pae.npy \\
         --pdb design_af2pred.pdb
 
     # Or provide lengths manually
-    python pmhci_ipsae.py design_af2pred_pae.npy \\
+    python calc_ipsae.py design_af2pred_pae.npy \\
         --binder 93 --mhc 178 --peptide 9
 
     # Or import as a library:
-    from pmhci_ipsae import score_binder_peptide_ipsae, chain_lengths_from_pdb
+    from calc_ipsae import score_binder_peptide_ipsae, chain_lengths_from_pdb
 """
 
 from __future__ import annotations
