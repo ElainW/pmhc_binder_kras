@@ -2,16 +2,25 @@
 fastrelax_designs.py
 
 Runs Rosetta FastRelax on pMHC fold complex PDBs for the passing designs.
-Computes interface energy (dG) and per-design Rosetta scores.
 
-Reads pre-split PDBs from split_pmhc_fold_pdbs.py:
-  {split_dir}/{design}_complex.pdb  — full complex, chain A = binder, chain B = MHC+peptide
+Interface scores are extracted from pose.scores dict after
+InterfaceAnalyzerMover.apply() — IAM deposits all scores into the pose's
+DataCache, which is then accessible as a flat Python dict via pose.scores.
+This is build-agnostic and captures the full score suite without relying
+on specific getter method names.
 
 Protocol:
-  - ref2015 score function
-  - Harmonic Cα coordinate constraints (weight=1.0) to limit backbone drift
-  - FastRelax (standard_repeats=3 by default)
-  - InterfaceAnalyzerMover on 'A_B' for dG, dSASA, shape complementarity
+ - ref2015 score function
+ - Harmonic Cα coordinate constraints (weight=1.0) to limit backbone drift
+ - FastRelax (standard_repeats=3 by default)
+ - InterfaceAnalyzerMover on 'A_B' for dG, dSASA, shape complementarity
+
+Scores captured (side1/side2 normalized/score excluded):
+  complex_normalized, dG_cross, dG_cross/dSASAx100,
+  dG_separated, dG_separated/dSASAx100,
+  dSASA_hphobic, dSASA_int, dSASA_polar,
+  delta_unsatHbonds, hbond_E_fraction, hbonds_int,
+  nres_all, nres_int, packstat, per_residue_energy_int, sc_value
 
 Usage:
     python fastrelax_designs.py \
@@ -33,18 +42,20 @@ from pyrosetta.rosetta.core.scoring import ScoreFunctionFactory
 
 DELTA_PAE_CUTOFF = -0.5
 
+# Scores to skip from pose.scores (redundant or unwanted)
+SKIP_COLS = {
+    'side1_normalized', 'side1_score',
+    'side2_normalized', 'side2_score',
+}
+
 
 # ── Rosetta helpers ───────────────────────────────────────────────────────────
 
 def run_fastrelax(pose, scorefxn, n_repeats: int = 3):
     """
     Run FastRelax with backbone coordinate constraints.
-
-    fr.constrain_relax_to_start_coords(True) tells FastRelax to internally add
-    harmonic Cα coordinate constraints before the first minimisation cycle.
-    This requires no VRT anchor atom and is stable across PyRosetta versions.
-    The coordinate_constraint score term weight must be set in scorefxn (done
-    in main()) for these constraints to have effect.
+    fr.constrain_relax_to_start_coords(True) adds harmonic Cα restraints
+    internally — no VRT anchor needed, stable across PyRosetta versions.
     """
     fr = FastRelax(scorefxn_in=scorefxn, standard_repeats=n_repeats)
     fr.constrain_relax_to_start_coords(True)
@@ -52,26 +63,14 @@ def run_fastrelax(pose, scorefxn, n_repeats: int = 3):
     return pose
 
 
-def _iam_get(iam, *method_names, default=np.nan):
-    """Try method names in order; return first that exists and doesn't raise."""
-    for name in method_names:
-        fn = getattr(iam, name, None)
-        if fn is None:
-            continue
-        try:
-            return fn()
-        except Exception:
-            continue
-    return default
-
-
 def compute_interface_scores(pose, interface: str = 'A_B') -> dict:
     """
-    Run InterfaceAnalyzerMover for chain A (binder) vs chain B (MHC+peptide).
+    Run InterfaceAnalyzerMover and extract scores from pose.scores dict.
 
-    Method names differ across PyRosetta builds; _iam_get() tries alternatives
-    in order so the script is robust to version differences:
-      shape complementarity: get_interface_sc() (newer) or get_shape_complementarity() (older)
+    IAM.apply() deposits all interface metrics into the pose DataCache,
+    accessible via pose.scores — a flat {name: value} Python dict.
+    This is more reliable than individual getter methods whose availability
+    varies across PyRosetta build versions.
     """
     iam = InterfaceAnalyzerMover(interface)
     iam.set_compute_packstat(True)
@@ -80,26 +79,16 @@ def compute_interface_scores(pose, interface: str = 'A_B') -> dict:
     iam.set_pack_separated(False)
     iam.apply(pose)
 
-    dG    = _iam_get(iam, 'get_interface_dG',         default=np.nan)
-    dSASA = _iam_get(iam, 'get_interface_delta_sasa',  default=np.nan)
+    scores = {}
+    for key, val in pose.scores.items():
+        if key in SKIP_COLS:
+            continue
+        try:
+            scores[key] = float(val)
+        except (TypeError, ValueError):
+            scores[key] = val
 
-    n_iface_res = 0
-    try:
-        n_iface_res = iam.get_interface_residues().size()
-    except Exception:
-        pass
-
-    return {
-        'dG':                    dG,
-        'dSASA':                 dSASA,
-        'dG_per_dSASA':          dG / max(dSASA, 1e-6) if not (np.isnan(dG) or np.isnan(dSASA)) else np.nan,
-        'n_interface_residues':  n_iface_res,
-        'packstat':              _iam_get(iam, 'get_interface_packstat',   default=np.nan),
-        # get_interface_sc() in newer builds, get_shape_complementarity() in older
-        'shape_complementarity': _iam_get(iam, 'get_interface_sc',
-                                                'get_shape_complementarity', default=np.nan),
-        'n_hbonds':              _iam_get(iam, 'get_interface_Hbond_num',  default=np.nan),
-    }
+    return scores
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -115,9 +104,9 @@ def main():
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
-    os.makedirs(os.path.join(args.out_dir, 'relaxed_pdbs'), exist_ok=True)
+    relaxed_pdb_dir = os.path.join(args.out_dir, 'relaxed_pdbs')
+    os.makedirs(relaxed_pdb_dir, exist_ok=True)
 
-    # Initialize PyRosetta
     pyrosetta.init(
         '-mute all '
         '-ex1 -ex2aro '
@@ -125,7 +114,7 @@ def main():
         '-ignore_unrecognized_res true '
         '-ignore_zero_occupancy false '
         '-load_PDB_components false',
-        silent=True
+        silent=True,
     )
 
     scorefxn = ScoreFunctionFactory.create_score_function('ref2015')
@@ -133,74 +122,79 @@ def main():
         pyrosetta.rosetta.core.scoring.ScoreType.coordinate_constraint, 1.0
     )
 
-    df = pd.read_csv(args.merged_scores, sep='\t')
+    df      = pd.read_csv(args.merged_scores, sep='\t')
     passing = df[df['delta_pae_int_peptide'] < DELTA_PAE_CUTOFF].copy()
     designs = passing['design'].tolist()
     print(f"Running FastRelax on {len(designs)} designs ({args.n_repeats} repeats each)...")
 
     records = []
+
     for idx, design in enumerate(designs):
         complex_path = os.path.join(args.split_dir, f'{design}_complex.pdb')
 
         if not os.path.exists(complex_path):
-            print(f"  ERROR: complex PDB not found for {design}: {complex_path}")
-            records.append({'design': design, 'dG': np.nan})
+            print(f"  ERROR: complex PDB not found: {complex_path}")
+            records.append({'design': design})
             continue
 
         print(f"  [{idx+1}/{len(designs)}] {design}")
 
         try:
-            # Load complex with proper chain A/B labels
             pose = pose_from_pdb(complex_path)
 
-            # Score before relaxation
+            # Score before relaxation (constraint term active)
             score_before = scorefxn(pose)
 
-            # Relax with internal Cα coordinate constraints
+            # Relax
             pose = run_fastrelax(pose, scorefxn, n_repeats=args.n_repeats)
 
             # Score after relaxation without constraint term
             scorefxn_no_cst = ScoreFunctionFactory.create_score_function('ref2015')
-            score_after = scorefxn_no_cst(pose)
-
-            # Interface analysis: chain A (binder) vs chain B (MHC+peptide)
-            interface_scores = compute_interface_scores(pose, interface='A_B')
+            score_after     = scorefxn_no_cst(pose)
 
             # Save relaxed PDB
-            relaxed_pdb = os.path.join(
-                args.out_dir, 'relaxed_pdbs', f'{design}_relaxed.pdb'
-            )
+            relaxed_pdb = os.path.join(relaxed_pdb_dir, f'{design}_relaxed.pdb')
             pose.dump_pdb(relaxed_pdb)
 
-            records.append({
-                'design':                design,
-                'rosetta_score_before':  round(score_before, 3),
-                'rosetta_score_after':   round(score_after, 3),
-                'rosetta_score_delta':   round(score_after - score_before, 3),
-                'dG':                    round(interface_scores['dG'], 3),
-                'dSASA':                 round(interface_scores['dSASA'], 3),
-                'dG_per_dSASA':          round(interface_scores['dG_per_dSASA'], 6),
-                'packstat':              round(interface_scores['packstat'], 3),
-                'shape_complementarity': round(interface_scores['shape_complementarity'], 3),
-                'n_hbonds':              interface_scores['n_hbonds'],
-                'n_interface_residues':  interface_scores['n_interface_residues'],
-                'complex_pdb':           complex_path,
-                'relaxed_pdb':           relaxed_pdb,
-            })
+            # Interface analysis — scores deposited into pose.scores by IAM
+            iface = compute_interface_scores(pose, interface='A_B')
+
+            if not iface:
+                print(f"    WARNING: no IAM scores found in pose.scores for {design}")
+            else:
+                print(f"    IAM scores captured: {sorted(iface.keys())}")
+
+            record = {
+                'design':               design,
+                'rosetta_score_before': round(score_before, 3),
+                'rosetta_score_after':  round(score_after,  3),
+                'rosetta_score_delta':  round(score_after - score_before, 3),
+                'complex_pdb':          complex_path,
+                'relaxed_pdb':          relaxed_pdb,
+            }
+            record.update(iface)
+            records.append(record)
 
         except Exception as e:
             print(f"    ERROR on {design}: {e}")
-            records.append({'design': design, 'dG': np.nan})
+            records.append({'design': design})
 
     out_df   = pd.DataFrame(records)
     out_path = os.path.join(args.out_dir, 'fastrelax_scores.tsv')
     out_df.to_csv(out_path, sep='\t', index=False)
-    print(f"\nSaved FastRelax scores to {out_path}")
+    print(f"\nSaved FastRelax scores → {out_path}")
 
-    valid = out_df.dropna(subset=['dG'])
+    # ── Summary ───────────────────────────────────────────────────────────────
+    key_cols = [
+        'dG_separated', 'dG_separated/dSASAx100', 'dSASA_int',
+        'delta_unsatHbonds', 'hbonds_int', 'packstat',
+        'sc_value', 'per_residue_energy_int',
+    ]
+    anchor = 'dG_separated'
+    valid  = out_df.dropna(subset=[anchor]) if anchor in out_df.columns else out_df
     print(f"\n── FastRelax summary ({len(valid)} designs) ──")
-    for col in ['dG', 'dSASA', 'packstat', 'shape_complementarity', 'n_hbonds']:
-        if col in valid.columns:
+    for col in key_cols:
+        if col in valid.columns and valid[col].notna().any():
             print(f"  {col}: mean={valid[col].mean():.3f}, "
                   f"min={valid[col].min():.3f}, "
                   f"max={valid[col].max():.3f}")
