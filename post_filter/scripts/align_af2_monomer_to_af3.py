@@ -30,7 +30,9 @@ Usage:
     python align_af2_monomer_to_af3.py \
         --af3_out_dir  /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --af2_mono_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/ \
-        --out_tsv      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af2_af3_rmsd.tsv
+        --out_tsv      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af2_af3_rmsd.tsv \
+        --save_superposed \
+        --superposed_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af2_af3_superimposed_pdbs/
 
     # Specific designs:
     python align_af2_monomer_to_af3.py \
@@ -180,7 +182,10 @@ def find_af2_monomer_pdb(af2_mono_dir: str, design: str) -> str | None:
         # Also try without 'author_' prefix
         design_dir = os.path.join(af2_mono_dir, design)
         if not os.path.isdir(design_dir):
-            return None
+            # Also try without the dates at the end
+            design_dir = os.path.join(af2_mono_dir, f"author_{design.split('_')[0]}")
+            if not os.path.isdir(design_dir):
+                return None
 
     for pattern in [
         '*_unrelaxed_rank_001*.pdb',
