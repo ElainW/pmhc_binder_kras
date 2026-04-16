@@ -7,7 +7,7 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 
 Contact definitions:
   all_contacts:         any heavy atom pair < 4.0 Å
-  polar_contacts:       N/O donor-acceptor pair < 3.5 Å
+  polar_contacts:       N/O donor-acceptor pair < 4.0 Å
   hydrophobic_contacts: peptide residue is hydrophobic AND any heavy atom < 4.0 Å
 
 Plot 1 (per backbone group):
@@ -54,7 +54,7 @@ DELTA_PAE_CUTOFF         = -0.5
 PEPTIDE_SEQ              = 'VVGADGVGK'
 PEPTIDE_LEN              = 9
 ALL_CONTACT_DIST         = 4.0
-POLAR_CONTACT_DIST       = 3.5
+POLAR_CONTACT_DIST       = 4.0
 HYDROPHOBIC_CONTACT_DIST = 4.0
 
 POLAR_ELEMENTS       = {'N', 'O'}
