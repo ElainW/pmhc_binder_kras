@@ -58,6 +58,7 @@ Usage:
 from __future__ import annotations
 
 import os
+import re
 import glob
 import json
 import tempfile
@@ -428,6 +429,7 @@ def compute_ipsae(pae: np.ndarray, token_chain_ids: list[str],
 def compute_contacts_from_pose(
     pose: Pose,
     peptide_len: int,
+    hotspot_positions: list[int],  # 1-based peptide positions from design_targets.csv
     binder_chain: str = 'A',
     pmhc_chain:   str = 'B',       # MHC+peptide merged in the temp PDB
 ) -> tuple[dict, list, list, list, list]:
@@ -445,12 +447,22 @@ def compute_contacts_from_pose(
 
     summary_dict keys:
       n_all_contacts, n_polar_contacts, n_hydrophobic_contacts, n_hbonds,
+      hbond_available, binder_res_in_contact,
       contacts_all_p{1..N}, contacts_polar_p{1..N},
       contacts_hydro_p{1..N}, contacts_hbond_p{1..N},
-      n_contacts_p5_all, n_contacts_p5_polar,
-      binder_res_in_contact, hbond_available
+      -- per hotspot position (mirroring contact_map.py p5 pattern) --
+      n_contacts_hotspot_p{pos}_all, n_contacts_hotspot_p{pos}_polar,
+      n_contacts_hotspot_p{pos}_hydro, n_contacts_hotspot_p{pos}_hbond,
+      n_saltbridge_hotspot_p{pos},
+      saltbridge_hotspot_p{pos}_binder_resnums,
+      saltbridge_hotspot_p{pos}_binder_aas,
+      -- hotspot totals --
+      n_contacts_hotspot_total_all, n_contacts_hotspot_total_polar,
+      n_contacts_hotspot_total_hydro, n_contacts_hotspot_total_hbond,
     """
-    # Write pose to a named temp file (auto-deleted on context exit)
+    SALT_BRIDGE_AA = {'R', 'K'}
+
+    # Write pose to a named temp file
     with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
         tmp_path = tmp.name
     try:
@@ -461,8 +473,8 @@ def compute_contacts_from_pose(
     finally:
         os.unlink(tmp_path)
 
-    pep_res  = pmhc_res[-peptide_len:]
-    n_pep    = len(pep_res)
+    pep_res = pmhc_res[-peptide_len:]
+    n_pep   = len(pep_res)
 
     if not binder_res or not pep_res:
         return {'n_all_contacts': 0, 'n_polar_contacts': 0,
@@ -472,11 +484,11 @@ def compute_contacts_from_pose(
     all_cts, polar_cts, hydro_cts = compute_contacts(binder_res, pep_res)
 
     # H-bonds only when Rosetta has added explicit H atoms
-    has_H = any(a.element == 'H'
-                for res in binder_res for a in res.get_atoms())
+    has_H     = any(a.element == 'H'
+                    for res in binder_res for a in res.get_atoms())
     hbond_cts = compute_hbonds(binder_res, pep_res) if has_H else []
 
-    # Per-position contact counts (1-based peptide positions)
+    # Per-position contact counts (0-indexed pi internally, 1-based in output)
     def _per_pos(contacts, n_pep):
         counts = [0] * n_pep
         for item in contacts:
@@ -491,20 +503,18 @@ def compute_contacts_from_pose(
     hbond_pp = _per_pos(hbond_cts, n_pep)
 
     summary: dict = {
-        'n_all_contacts':          len(all_cts),
-        'n_polar_contacts':        len(polar_cts),
-        'n_hydrophobic_contacts':  len(hydro_cts),
-        'n_hbonds':                len(hbond_cts),
-        'hbond_available':         has_H,
-        # p5 (index 4) is the primary neoepitope contact position
-        'n_contacts_p5_all':       all_pp[4]   if n_pep > 4 else 0,
-        'n_contacts_p5_polar':     polar_pp[4] if n_pep > 4 else 0,
-        'binder_res_in_contact':   len(set(
+        'n_all_contacts':         len(all_cts),
+        'n_polar_contacts':       len(polar_cts),
+        'n_hydrophobic_contacts': len(hydro_cts),
+        'n_hbonds':               len(hbond_cts),
+        'hbond_available':        has_H,
+        'binder_res_in_contact':  len(set(
             item[0] if not isinstance(item, dict) else item['bi']
             for item in all_cts
         )),
     }
-    # Per-position columns
+
+    # Per-position columns (all positions)
     for i, (a, po, h, hb) in enumerate(
             zip(all_pp, polar_pp, hydro_pp, hbond_pp), start=1):
         summary[f'contacts_all_p{i}']   = a
@@ -512,12 +522,58 @@ def compute_contacts_from_pose(
         summary[f'contacts_hydro_p{i}'] = h
         summary[f'contacts_hbond_p{i}'] = hb
 
+    # Per-hotspot stats (mirrors contact_map.py p5 pattern for each hotspot pos)
+    hs_total_all = hs_total_polar = hs_total_hydro = hs_total_hbond = 0
+
+    for pos in hotspot_positions:
+        pi = pos - 1   # convert to 0-based peptide index
+        if not (0 <= pi < n_pep):
+            continue
+
+        n_all   = all_pp[pi]
+        n_polar = polar_pp[pi]
+        n_hydro = hydro_pp[pi]
+        n_hbond = hbond_pp[pi]
+
+        hs_total_all   += n_all
+        hs_total_polar += n_polar
+        hs_total_hydro += n_hydro
+        hs_total_hbond += n_hbond
+
+        summary[f'n_contacts_hotspot_p{pos}_all']   = n_all
+        summary[f'n_contacts_hotspot_p{pos}_polar']  = n_polar
+        summary[f'n_contacts_hotspot_p{pos}_hydro']  = n_hydro
+        summary[f'n_contacts_hotspot_p{pos}_hbond']  = n_hbond
+
+        # Salt bridge at this hotspot position: polar contact where binder AA is R or K
+        # polar_cts tuple: (bi, pi, dist, b_atom, p_atom, b_aa, p_aa)
+        sb = [(bi, b_aa) for (bi, ppi, dist, b_at, p_at, b_aa, p_aa) in polar_cts
+              if ppi == pi and b_aa in SALT_BRIDGE_AA]
+        summary[f'n_saltbridge_hotspot_p{pos}']                  = len(sb)
+        summary[f'saltbridge_hotspot_p{pos}_binder_resnums'] = str(
+            sorted(set(binder_res[bi].id[1] for bi, _ in sb
+                       if bi < len(binder_res)))
+        )
+        summary[f'saltbridge_hotspot_p{pos}_binder_aas']     = str(
+            [b_aa for _, b_aa in sb]
+        )
+
+    summary['n_contacts_hotspot_total_all']   = hs_total_all
+    summary['n_contacts_hotspot_total_polar']  = hs_total_polar
+    summary['n_contacts_hotspot_total_hydro']  = hs_total_hydro
+    summary['n_contacts_hotspot_total_hbond']  = hs_total_hbond
+
     return summary, all_cts, polar_cts, hydro_cts, hbond_cts
 
 
 def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
-                     binder_res_list, pep_res_list) -> dict[str, list]:
-    """Convert raw contact tuples/dicts to TSV-ready row lists."""
+                     binder_res_list, pep_res_list,
+                     hotspot_positions: list[int] = None) -> dict[str, list]:
+    """
+    Convert raw contact tuples/dicts to TSV-ready row lists.
+    Adds is_hotspot column (True/False) to every row when hotspot_positions given.
+    """
+    hotspot_set  = set(hotspot_positions) if hotspot_positions else set()
     all_rows, polar_rows, hydro_rows, hbond_rows = [], [], [], []
 
     for (bi, pi, dist, b_aa, p_aa) in all_cts:
@@ -526,6 +582,7 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'binder_resnum': binder_res_list[bi].id[1] if bi < len(binder_res_list) else '',
             'binder_aa': b_aa, 'pep_pos_1idx': pi + 1, 'pep_aa': p_aa,
             'min_heavy_dist': dist,
+            'is_hotspot': (pi + 1) in hotspot_set,
         })
     for (bi, pi, dist, b_at, p_at, b_aa, p_aa) in polar_cts:
         polar_rows.append({
@@ -534,6 +591,7 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'binder_aa': b_aa, 'binder_atom': b_at,
             'pep_pos_1idx': pi + 1, 'pep_aa': p_aa, 'pep_atom': p_at,
             'polar_dist': dist,
+            'is_hotspot': (pi + 1) in hotspot_set,
         })
     for (bi, pi, dist, b_aa, p_aa) in hydro_cts:
         hydro_rows.append({
@@ -542,6 +600,7 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'binder_aa': b_aa, 'pep_pos_1idx': pi + 1, 'pep_aa': p_aa,
             'pep_resname': pep_res_list[pi].resname if pi < len(pep_res_list) else '',
             'min_dist': dist,
+            'is_hotspot': (pi + 1) in hotspot_set,
         })
     for hb in hbond_cts:
         hbond_rows.append({
@@ -553,6 +612,7 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'pep_pos_1idx': hb['pi'] + 1, 'pep_aa': hb['p_aa'],
             'pep_atom':    hb['p_atom'], 'direction': hb['direction'],
             'da_dist':     hb['da_dist'], 'dha_angle': hb['dha_angle'],
+            'is_hotspot': (hb['pi'] + 1) in hotspot_set,
         })
     return {'all': all_rows, 'polar': polar_rows,
             'hydro': hydro_rows, 'hbond': hbond_rows}
@@ -687,7 +747,8 @@ def process_design(
     contact_rows = empty_rows
     try:
         ct_summary, all_cts, polar_cts, hydro_cts, hbond_cts = \
-            compute_contacts_from_pose(pose, peptide_len=peptide_len)
+            compute_contacts_from_pose(pose, peptide_len=peptide_len,
+                                       hotspot_positions=hotspot_positions)
         record.update(ct_summary)
 
         # Rebuild binder/pep residue lists for row assembly (reuse temp PDB logic)
@@ -703,12 +764,16 @@ def process_design(
         contact_rows = contacts_to_rows(
             design, all_cts, polar_cts, hydro_cts, hbond_cts,
             binder_res_list, pep_res_list,
+            hotspot_positions=hotspot_positions,
         )
+        hs_all   = ct_summary.get('n_contacts_hotspot_total_all',   0)
+        hs_polar = ct_summary.get('n_contacts_hotspot_total_polar',  0)
         print(f"    Contacts: all={ct_summary['n_all_contacts']}  "
               f"polar={ct_summary['n_polar_contacts']}  "
               f"hydro={ct_summary['n_hydrophobic_contacts']}  "
               f"hbonds={ct_summary['n_hbonds']}  "
-              f"(H available={ct_summary['hbond_available']})")
+              f"(H={ct_summary['hbond_available']})  "
+              f"hotspot_all={hs_all}  hotspot_polar={hs_polar}")
     except Exception as e:
         print(f"    WARNING: contact_map failed: {e}")
 
@@ -844,9 +909,15 @@ def main():
                   + sorted([c for c in df.columns if c.startswith('cms_hotspot_p')],
                             key=lambda x: int(x.replace('cms_hotspot_p', ''))))
     ct_sum_cols = ['n_all_contacts', 'n_polar_contacts', 'n_hydrophobic_contacts',
-                   'n_hbonds', 'hbond_available',
-                   'n_contacts_p5_all', 'n_contacts_p5_polar',
-                   'binder_res_in_contact']
+                   'n_hbonds', 'hbond_available', 'binder_res_in_contact',
+                   'n_contacts_hotspot_total_all', 'n_contacts_hotspot_total_polar',
+                   'n_contacts_hotspot_total_hydro', 'n_contacts_hotspot_total_hbond']
+    # Per-hotspot position summary columns (sorted by position number)
+    ct_hotspot_cols = sorted(
+        [c for c in df.columns if 'hotspot_p' in c and not c.startswith('contacts_')],
+        key=lambda x: int(re.search(r'_p(\d+)_', x).group(1))
+        if re.search(r'_p(\d+)_', x) else 0
+    )
     ct_pos_cols = sorted(
         [c for c in df.columns
          if c.startswith('contacts_') and '_p' in c],
@@ -856,7 +927,7 @@ def main():
                   'rosetta_score_delta']
 
     ordered = (id_cols + af3_cols + ipsae_cols + dssp_cols
-               + cms_cols + ct_sum_cols + ct_pos_cols + ros_cols)
+               + cms_cols + ct_sum_cols + ct_hotspot_cols + ct_pos_cols + ros_cols)
     present = [c for c in ordered if c in df.columns]
     extras  = [c for c in df.columns if c not in present]
     df      = df[present + extras]
@@ -869,7 +940,9 @@ def main():
     key_cols = ['af3_iptm', 'af3_ranking_score', 'ipsae_binder_peptide',
                 'mean_pae_bp', 'ss_helix_pct', 'ss_sheet_pct', 'ss_loop_pct',
                 'cms_peptide_total', 'cms_hotspot_total',
-                'n_all_contacts', 'n_polar_contacts', 'n_hbonds']
+                'n_all_contacts', 'n_polar_contacts', 'n_hbonds',
+                'n_contacts_hotspot_total_all', 'n_contacts_hotspot_total_polar',
+                'n_contacts_hotspot_total_hbond']
     anchor = 'ipsae_binder_peptide'
     valid  = df.dropna(subset=[anchor]) if anchor in df.columns else df
     print(f"-- Summary ({len(valid)} designs with ipSAE) --")
