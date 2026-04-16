@@ -7,7 +7,7 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 
 Contact definitions:
   all_contacts:         any heavy atom pair < 4.0 Å
-  polar_contacts:       N/O donor-acceptor pair < 4.0 Å
+  polar_contacts:       N/O donor-acceptor pair < 3.5 Å
   hydrophobic_contacts: peptide residue is hydrophobic AND any heavy atom < 4.0 Å
 
 Plot 1 (per backbone group):
@@ -54,7 +54,7 @@ DELTA_PAE_CUTOFF         = -0.5
 PEPTIDE_SEQ              = 'VVGADGVGK'
 PEPTIDE_LEN              = 9
 ALL_CONTACT_DIST         = 4.0
-POLAR_CONTACT_DIST       = 4.0
+POLAR_CONTACT_DIST       = 3.5
 HYDROPHOBIC_CONTACT_DIST = 4.0
 
 POLAR_ELEMENTS       = {'N', 'O'}
@@ -168,6 +168,118 @@ def compute_contacts(binder_residues: list, peptide_residues: list):
     return all_contacts, polar_contacts, hydrophobic_contacts
 
 
+# H-bond geometry criteria (Baker lab / Rosetta convention)
+HBOND_DA_DIST    = 3.5    # Å  donor-heavy to acceptor-heavy (D···A)
+HBOND_MIN_ANGLE  = 120.0  # degrees  D–H···A angle
+
+
+def _angle_deg(v1: np.ndarray, v2: np.ndarray) -> float:
+    """Angle in degrees between two vectors."""
+    cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-9)
+    return float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
+
+
+def compute_hbonds(binder_residues: list, peptide_residues: list) -> list:
+    """
+    Detect genuine hydrogen bonds between binder and peptide using explicit
+    hydrogen geometry. Requires hydrogens to be present in the PDB (i.e. the
+    FastRelaxed structure written by Rosetta, which adds H internally).
+
+    Criteria (standard Baker lab convention):
+      - Donor (D) is N or O carrying at least one H
+      - Acceptor (A) is N or O with no H (lone pair acceptor) OR any N/O
+        (Rosetta allows N–H···N and O–H···O)
+      - D···A distance < 3.5 Å
+      - D–H···A angle > 120°
+
+    Returns list of dicts with:
+      bi, pi, b_aa, p_aa, b_donor_atom, p_acceptor_atom (or vice versa),
+      da_dist, dha_angle, direction ('binder_donor' or 'peptide_donor')
+    """
+    hbonds = []
+
+    def _get_donor_H_pairs(residue):
+        """Return list of (donor_atom, H_atom, donor_coord, H_coord) for the residue."""
+        atoms = {a.get_name().strip(): a for a in residue.get_atoms()}
+        pairs = []
+        for name, atom in atoms.items():
+            if atom.element not in ('N', 'O'):
+                continue
+            # Find bonded hydrogens: H atoms whose name starts with H and
+            # are within 1.2 Å of this heavy atom (covalent bond distance)
+            donor_coord = atom.get_vector().get_array()
+            for hname, hatom in atoms.items():
+                if hatom.element != 'H':
+                    continue
+                h_coord = hatom.get_vector().get_array()
+                if np.linalg.norm(donor_coord - h_coord) < 1.2:
+                    pairs.append((atom, hatom, donor_coord, h_coord))
+        return pairs
+
+    def _get_acceptors(residue):
+        """Return list of (acceptor_atom, acceptor_coord) for N and O atoms."""
+        return [(a, a.get_vector().get_array())
+                for a in residue.get_atoms()
+                if a.element in ('N', 'O')]
+
+    for bi, b_res in enumerate(binder_residues):
+        b_aa          = THREE_TO_ONE.get(b_res.resname, 'X')
+        b_donor_pairs = _get_donor_H_pairs(b_res)
+        b_acceptors   = _get_acceptors(b_res)
+
+        for pi, p_res in enumerate(peptide_residues):
+            p_aa          = THREE_TO_ONE.get(p_res.resname, 'X')
+            p_donor_pairs = _get_donor_H_pairs(p_res)
+            p_acceptors   = _get_acceptors(p_res)
+
+            # Direction 1: binder is donor, peptide is acceptor
+            for (d_atom, h_atom, d_coord, h_coord) in b_donor_pairs:
+                for (a_atom, a_coord) in p_acceptors:
+                    da_dist = float(np.linalg.norm(d_coord - a_coord))
+                    if da_dist > HBOND_DA_DIST:
+                        continue
+                    # D–H···A angle
+                    vec_dh = h_coord - d_coord
+                    vec_ha = a_coord - h_coord
+                    angle  = _angle_deg(vec_dh, vec_ha)
+                    if angle >= HBOND_MIN_ANGLE:
+                        hbonds.append({
+                            'bi':              bi,
+                            'pi':              pi,
+                            'b_aa':            b_aa,
+                            'p_aa':            p_aa,
+                            'direction':       'binder_donor',
+                            'b_atom':          d_atom.get_name().strip(),
+                            'p_atom':          a_atom.get_name().strip(),
+                            'da_dist':         round(da_dist, 3),
+                            'dha_angle':       round(angle, 1),
+                        })
+
+            # Direction 2: peptide is donor, binder is acceptor
+            for (d_atom, h_atom, d_coord, h_coord) in p_donor_pairs:
+                for (a_atom, a_coord) in b_acceptors:
+                    da_dist = float(np.linalg.norm(d_coord - a_coord))
+                    if da_dist > HBOND_DA_DIST:
+                        continue
+                    vec_dh = h_coord - d_coord
+                    vec_ha = a_coord - h_coord
+                    angle  = _angle_deg(vec_dh, vec_ha)
+                    if angle >= HBOND_MIN_ANGLE:
+                        hbonds.append({
+                            'bi':              bi,
+                            'pi':              pi,
+                            'b_aa':            b_aa,
+                            'p_aa':            p_aa,
+                            'direction':       'peptide_donor',
+                            'b_atom':          a_atom.get_name().strip(),
+                            'p_atom':          d_atom.get_name().strip(),
+                            'da_dist':         round(da_dist, 3),
+                            'dha_angle':       round(angle, 1),
+                        })
+
+    return hbonds
+
+
 # ── Plotting helpers ──────────────────────────────────────────────────────────
 
 def plot_backbone_group_heatmaps(group_id: str,
@@ -176,38 +288,40 @@ def plot_backbone_group_heatmaps(group_id: str,
                                   hydro_counts: np.ndarray,
                                   n_designs: int,
                                   out_path: str,
-                                  mode_label: str = ''):
+                                  mode_label: str = '',
+                                  hbond_counts: np.ndarray | None = None):
     """
-    Plot 1: 3-panel raw count heatmap for one backbone group.
-    rows = binder residue position (0-indexed, padded to group max length)
-    cols = peptide position
-    Values = raw counts (number of designs with a contact at that cell).
+    Plot 1: heatmap panels for one backbone group. Raw contact counts.
+    If hbond_counts provided (requires explicit H in PDB), adds a 4th panel.
     """
     max_len    = all_counts.shape[0]
     pep_labels = [f'p{i+1}\n{PEPTIDE_SEQ[i]}' for i in range(PEPTIDE_LEN)]
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, max(6, max_len // 5)), sharey=True)
+    show_hbond = hbond_counts is not None and hbond_counts.max() > 0
+    n_panels   = 4 if show_hbond else 3
+    fig, axes  = plt.subplots(1, n_panels,
+                               figsize=(6 * n_panels, max(6, max_len // 5)),
+                               sharey=True)
 
-    vmax_all   = int(all_counts.max())   if all_counts.max()   > 0 else 1
-    vmax_polar = int(polar_counts.max()) if polar_counts.max() > 0 else 1
-    vmax_hydro = int(hydro_counts.max()) if hydro_counts.max() > 0 else 1
+    panels = [
+        (all_counts,   f'All contacts (< {ALL_CONTACT_DIST} Å)',          'YlOrRd'),
+        (polar_counts, f'Polar contacts (< {POLAR_CONTACT_DIST} Å, N/O)', 'Blues'),
+        (hydro_counts, f'Hydrophobic (< {HYDROPHOBIC_CONTACT_DIST} Å)',    'Greens'),
+    ]
+    if show_hbond:
+        panels.append((hbond_counts,
+                        f'H-bonds (D–H···A > {HBOND_MIN_ANGLE}°, D···A < {HBOND_DA_DIST} Å)',
+                        'Purples'))
 
-    for ax, counts, title, cmap, vmax in zip(
-        axes,
-        [all_counts, polar_counts, hydro_counts],
-        [f'All contacts (< {ALL_CONTACT_DIST} Å)',
-         f'Polar contacts (< {POLAR_CONTACT_DIST} Å, N/O pairs)',
-         f'Hydrophobic contacts (< {HYDROPHOBIC_CONTACT_DIST} Å)'],
-        ['YlOrRd', 'Blues', 'Greens'],
-        [vmax_all, vmax_polar, vmax_hydro],
-    ):
+    for ax, (counts, title, cmap) in zip(axes, panels):
+        vmax = int(counts.max()) if counts.max() > 0 else 1
         im = ax.imshow(counts, aspect='auto', cmap=cmap,
                        vmin=0, vmax=vmax, origin='upper', interpolation='nearest')
         plt.colorbar(im, ax=ax, fraction=0.03, pad=0.04, label='# designs')
         ax.set_xticks(range(PEPTIDE_LEN))
         ax.set_xticklabels(pep_labels, fontsize=9)
         ax.set_xlabel('Peptide position', fontsize=11)
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title, fontsize=10)
         ax.axvline(3.5, color='blue', lw=1.5, ls='--', alpha=0.7)
         ax.axvline(4.5, color='blue', lw=1.5, ls='--', alpha=0.7)
         ax.text(4, -1.5, 'D12\n(neo)', ha='center', va='top',
@@ -336,14 +450,15 @@ def main():
 
     global_max_len = max(group_max_len.values())
 
-    # ── Per-group count matrices ──────────────────────────────────────────────
-    # group_counts[grp] = {'all': array, 'polar': array, 'hydro': array, 'n': int}
+    # Per-group count matrices ──────────────────────────────────────────────────
+    # group_counts[grp] = {'all': array, 'polar': array, 'hydro': array, 'hbond': array, 'n': int}
     group_counts: dict[str, dict] = {}
     for grp, max_len in group_max_len.items():
         group_counts[grp] = {
             'all':   np.zeros((max_len, PEPTIDE_LEN), dtype=int),
             'polar': np.zeros((max_len, PEPTIDE_LEN), dtype=int),
             'hydro': np.zeros((max_len, PEPTIDE_LEN), dtype=int),
+            'hbond': np.zeros((max_len, PEPTIDE_LEN), dtype=int),
             'n':     0,
         }
 
@@ -351,12 +466,15 @@ def main():
     global_all   = np.zeros((global_max_len, PEPTIDE_LEN), dtype=int)
     global_polar = np.zeros((global_max_len, PEPTIDE_LEN), dtype=int)
     global_hydro = np.zeros((global_max_len, PEPTIDE_LEN), dtype=int)
+    global_hbond = np.zeros((global_max_len, PEPTIDE_LEN), dtype=int)
 
     all_contact_rows   = []
     polar_contact_rows = []
     hydro_contact_rows = []
+    hbond_rows         = []
     summary_rows       = []
     n_processed        = 0
+    n_hbond_available  = 0   # designs where H atoms were present
 
     for design in valid_designs:
         # Load residues from the appropriate source
@@ -380,6 +498,22 @@ def main():
 
         all_cts, polar_cts, hydro_cts = compute_contacts(binder_res, pep_res)
 
+        # H-bond detection — only when explicit H atoms are present in the PDB
+        # (i.e. FastRelaxed structures from Rosetta, which adds H internally).
+        # Detect H presence by checking if any atom in binder has element 'H'.
+        has_H = any(a.element == 'H'
+                    for res in binder_res for a in res.get_atoms())
+        if has_H:
+            hbond_cts = compute_hbonds(binder_res, pep_res)
+            n_hbond_available += 1
+        else:
+            hbond_cts = []
+            if use_relaxed:
+                print(f"  WARNING: no H atoms in relaxed PDB for {design} — "
+                      f"H-bond angle filter skipped (BioPython strips H by default; "
+                      f"re-read with PERMISSIVE=False or use PDBParser(QUIET=True) "
+                      f"and ensure PDB was written with ATOM H records)")
+
         # Accumulate per-group counts
         gc = group_counts[grp]
         for (bi, pi, *_) in all_cts:
@@ -391,6 +525,10 @@ def main():
         for (bi, pi, *_) in hydro_cts:
             if bi < gc['hydro'].shape[0]:
                 gc['hydro'][bi, pi] += 1
+        for hb in hbond_cts:
+            bi, pi = hb['bi'], hb['pi']
+            if bi < gc['hbond'].shape[0]:
+                gc['hbond'][bi, pi] += 1
         gc['n'] += 1
 
         # Accumulate global counts for plot 2
@@ -403,6 +541,10 @@ def main():
         for (bi, pi, *_) in hydro_cts:
             if bi < global_max_len:
                 global_hydro[bi, pi] += 1
+        for hb in hbond_cts:
+            bi, pi = hb['bi'], hb['pi']
+            if bi < global_max_len:
+                global_hbond[bi, pi] += 1
 
         # Per-contact detail rows
         for (bi, pi, dist, b_aa, p_aa) in all_cts:
@@ -428,6 +570,21 @@ def main():
                 'min_dist': dist, 'contact_type': 'hydrophobic',
             })
 
+        for hb in hbond_cts:
+            hbond_rows.append({
+                'design':        design,
+                'binder_pos_0idx': hb['bi'],
+                'binder_resnum': binder_res[hb['bi']].id[1],
+                'binder_aa':     hb['b_aa'],
+                'binder_atom':   hb['b_atom'],
+                'pep_pos_1idx':  hb['pi'] + 1,
+                'pep_aa':        hb['p_aa'],
+                'pep_atom':      hb['p_atom'],
+                'direction':     hb['direction'],
+                'da_dist':       hb['da_dist'],
+                'dha_angle':     hb['dha_angle'],
+            })
+
         # Salt bridge detection at p5
         SALT_BRIDGE_AA = {'R', 'K'}
         p5_sb = [(bi, pi, d, ba, pa, baa, paa)
@@ -445,6 +602,9 @@ def main():
             'n_contacts_p5_all':             sum(1 for (_, pi, *_) in all_cts   if pi == 4),
             'n_contacts_p5_polar':           sum(1 for (_, pi, *_) in polar_cts if pi == 4),
             'n_contacts_p5_hydro':           sum(1 for (_, pi, *_) in hydro_cts if pi == 4),
+            'n_hbonds':                       len(hbond_cts),
+            'n_hbonds_p5':                    sum(1 for hb in hbond_cts if hb['pi'] == 4),
+            'hbond_available':                has_H,
             'n_p5_saltbridge':               len(p5_sb),
             'p5_sb_binder_resnums':          str(sorted(set(binder_res[bi].id[1] for (bi, *_) in p5_sb))),
             'p5_sb_binder_aas':              str([baa for (*_, baa, _) in p5_sb]),
@@ -464,8 +624,18 @@ def main():
         os.path.join(args.out_dir, 'polar_contacts.tsv'), sep='\t', index=False)
     pd.DataFrame(hydro_contact_rows).to_csv(
         os.path.join(args.out_dir, 'hydrophobic_contacts.tsv'), sep='\t', index=False)
+    pd.DataFrame(hbond_rows).to_csv(
+        os.path.join(args.out_dir, 'hbond_contacts.tsv'), sep='\t', index=False)
     pd.DataFrame(summary_rows).to_csv(
         os.path.join(args.out_dir, 'contact_summary.tsv'), sep='\t', index=False)
+
+    if use_relaxed:
+        print(f"H-bond angle filter: {n_hbond_available}/{n_processed} designs "
+              f"had explicit H atoms → true H-bonds computed")
+        if n_hbond_available < n_processed:
+            print(f"  NOTE: Rosetta's dump_pdb() writes H atoms by default. "
+                  f"If H atoms are missing, check that PDB was written after "
+                  f"pyrosetta.init() with '-no_optH false'.")
 
     # ── Plot 1: Per-backbone-group heatmaps (raw counts) ─────────────────────
     print(f"\nGenerating per-backbone-group heatmaps ({len(group_counts)} groups)...")
@@ -480,6 +650,7 @@ def main():
             n_designs    = gc['n'],
             out_path     = out_path,
             mode_label   = mode_label,
+            hbond_counts = gc['hbond'] if n_hbond_available > 0 else None,
         )
 
     # ── Plot 2: Global per-position raw counts ────────────────────────────────
