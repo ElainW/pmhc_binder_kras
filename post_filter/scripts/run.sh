@@ -9,17 +9,18 @@ python split_pmhc_fold_pdbs.py \
     --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/
 
-# 1. Charge/cysteine audit (fast, CPU)
+# # 1. Charge/cysteine audit (fast, CPU)
 python charge_cysteine_audit.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
     --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 
 # 2. Contact map (CPU, ~5 min for 49 designs)
+# unrelaxed structures
 python contact_map.py \
     --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
     --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
+    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_unrelaxed/
 
 # 3. RMSD (CPU, fast)
 python compute_rmsd.py \
@@ -35,3 +36,12 @@ python fastrelax_designs.py \
     --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
     --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/ \
     --n_repeats 3
+
+# Contact map on fastrelaxed structures
+python contact_map.py \
+    --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
+    --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
+    --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/relaxed_pdbs/ \
+    --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_relaxed/
+
+# compare_contact.py is run when no hydrogen bond is incorporated, since only relaxed structures have H
