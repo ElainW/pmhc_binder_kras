@@ -8,7 +8,7 @@ Computes four analysis metrics on AF3-predicted pMHC-minibinder structures:
   2. ipSAE  — binder<->peptide ipSAE from AF3 PAE matrix
               (top-ranked seed's confidences.json — coordinate-independent)
   3. DSSP   — secondary structure of BINDER CHAIN ONLY
-              (% helix / sheet / loop, counts, full SS string)
+              (% helix / sheet / loop, counts, full SS string, on relaxed structure)
   4. Contacts — all / polar / hydrophobic / H-bond contacts between binder
                 and peptide, imported directly from contact_map.py
 
@@ -40,13 +40,10 @@ Chain convention in AF3 CIF:
 
 Usage:
     python af3_design_stats.py \\
-        --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \\
-        --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/ \\
-        --targets_csv /path/to/design_targets.csv \\
-        --n_repeats   3
-
-    # No FastRelax (contacts/CMS/DSSP on raw AF3 CIF):
-    python af3_design_stats.py ... --no_relax
+        --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \\
+        --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \\
+        --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/ \\
+        --targets_csv     /path/to/design_targets.csv
 
     # Specific designs:
     python af3_design_stats.py ... --designs ctnnb1-15 gp100-3 mart1-3
@@ -426,70 +423,26 @@ def compute_ipsae(pae: np.ndarray, token_chain_ids: list[str],
 # Contact analysis (via contact_map.py import)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def compute_contacts_from_pose(
-    pose: Pose,
+def _contacts_summary(
+    binder_res: list,
+    pep_res: list,
+    all_cts: list,
+    polar_cts: list,
+    hydro_cts: list,
+    hbond_cts: list,
+    has_H: bool,
     peptide_len: int,
-    hotspot_positions: list[int],  # 1-based peptide positions from design_targets.csv
-    binder_chain: str = 'A',
-    pmhc_chain:   str = 'B',       # MHC+peptide merged in the temp PDB
-) -> tuple[dict, list, list, list, list]:
+    hotspot_positions: list[int],
+) -> dict:
     """
-    Dump pose to a temp PDB, load with BioPython via
-    contact_map.get_residues_from_complex(), then call
-    contact_map.compute_contacts() and compute_hbonds().
-
-    The temp PDB uses standard 2-chain layout produced by pose.dump_pdb():
-      chain A = binder, chain B = MHC+peptide (peptide = last peptide_len residues)
-
-    Returns:
-      (summary_dict,
-       all_contacts, polar_contacts, hydro_contacts, hbond_contacts)
-
-    summary_dict keys:
-      n_all_contacts, n_polar_contacts, n_hydrophobic_contacts, n_hbonds,
-      hbond_available, binder_res_in_contact,
-      contacts_all_p{1..N}, contacts_polar_p{1..N},
-      contacts_hydro_p{1..N}, contacts_hbond_p{1..N},
-      -- per hotspot position (mirroring contact_map.py p5 pattern) --
-      n_contacts_hotspot_p{pos}_all, n_contacts_hotspot_p{pos}_polar,
-      n_contacts_hotspot_p{pos}_hydro, n_contacts_hotspot_p{pos}_hbond,
-      n_saltbridge_hotspot_p{pos},
-      saltbridge_hotspot_p{pos}_binder_resnums,
-      saltbridge_hotspot_p{pos}_binder_aas,
-      -- hotspot totals --
-      n_contacts_hotspot_total_all, n_contacts_hotspot_total_polar,
-      n_contacts_hotspot_total_hydro, n_contacts_hotspot_total_hbond,
+    Build the contacts summary dict from pre-computed contact lists.
+    Shared by compute_contacts_from_pose (pose path) and process_design
+    (direct relaxed PDB path) to avoid duplicating logic.
     """
     SALT_BRIDGE_AA = {'R', 'K'}
+    n_pep = len(pep_res)
 
-    # Write pose to a named temp file
-    with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
-        tmp_path = tmp.name
-    try:
-        pose.dump_pdb(tmp_path)
-        binder_res, pmhc_res = get_residues_from_complex(
-            tmp_path, binder_chain=binder_chain, pmhc_chain=pmhc_chain
-        )
-    finally:
-        os.unlink(tmp_path)
-
-    pep_res = pmhc_res[-peptide_len:]
-    n_pep   = len(pep_res)
-
-    if not binder_res or not pep_res:
-        return {'n_all_contacts': 0, 'n_polar_contacts': 0,
-                'n_hydrophobic_contacts': 0, 'n_hbonds': 0,
-                'hbond_available': False}, [], [], [], []
-
-    all_cts, polar_cts, hydro_cts = compute_contacts(binder_res, pep_res)
-
-    # H-bonds only when Rosetta has added explicit H atoms
-    has_H     = any(a.element == 'H'
-                    for res in binder_res for a in res.get_atoms())
-    hbond_cts = compute_hbonds(binder_res, pep_res) if has_H else []
-
-    # Per-position contact counts (0-indexed pi internally, 1-based in output)
-    def _per_pos(contacts, n_pep):
+    def _per_pos(contacts):
         counts = [0] * n_pep
         for item in contacts:
             pi = item['pi'] if isinstance(item, dict) else item[1]
@@ -497,10 +450,10 @@ def compute_contacts_from_pose(
                 counts[pi] += 1
         return counts
 
-    all_pp   = _per_pos(all_cts,   n_pep)
-    polar_pp = _per_pos(polar_cts, n_pep)
-    hydro_pp = _per_pos(hydro_cts, n_pep)
-    hbond_pp = _per_pos(hbond_cts, n_pep)
+    all_pp   = _per_pos(all_cts)
+    polar_pp = _per_pos(polar_cts)
+    hydro_pp = _per_pos(hydro_cts)
+    hbond_pp = _per_pos(hbond_cts)
 
     summary: dict = {
         'n_all_contacts':         len(all_cts),
@@ -514,7 +467,6 @@ def compute_contacts_from_pose(
         )),
     }
 
-    # Per-position columns (all positions)
     for i, (a, po, h, hb) in enumerate(
             zip(all_pp, polar_pp, hydro_pp, hbond_pp), start=1):
         summary[f'contacts_all_p{i}']   = a
@@ -522,14 +474,12 @@ def compute_contacts_from_pose(
         summary[f'contacts_hydro_p{i}'] = h
         summary[f'contacts_hbond_p{i}'] = hb
 
-    # Per-hotspot stats (mirrors contact_map.py p5 pattern for each hotspot pos)
     hs_total_all = hs_total_polar = hs_total_hydro = hs_total_hbond = 0
 
     for pos in hotspot_positions:
-        pi = pos - 1   # convert to 0-based peptide index
+        pi = pos - 1
         if not (0 <= pi < n_pep):
             continue
-
         n_all   = all_pp[pi]
         n_polar = polar_pp[pi]
         n_hydro = hydro_pp[pi]
@@ -545,11 +495,11 @@ def compute_contacts_from_pose(
         summary[f'n_contacts_hotspot_p{pos}_hydro']  = n_hydro
         summary[f'n_contacts_hotspot_p{pos}_hbond']  = n_hbond
 
-        # Salt bridge at this hotspot position: polar contact where binder AA is R or K
+        # Salt bridge: polar contact at this hotspot where binder AA is R or K
         # polar_cts tuple: (bi, pi, dist, b_atom, p_atom, b_aa, p_aa)
         sb = [(bi, b_aa) for (bi, ppi, dist, b_at, p_at, b_aa, p_aa) in polar_cts
               if ppi == pi and b_aa in SALT_BRIDGE_AA]
-        summary[f'n_saltbridge_hotspot_p{pos}']                  = len(sb)
+        summary[f'n_saltbridge_hotspot_p{pos}']              = len(sb)
         summary[f'saltbridge_hotspot_p{pos}_binder_resnums'] = str(
             sorted(set(binder_res[bi].id[1] for bi, _ in sb
                        if bi < len(binder_res)))
@@ -563,6 +513,48 @@ def compute_contacts_from_pose(
     summary['n_contacts_hotspot_total_hydro']  = hs_total_hydro
     summary['n_contacts_hotspot_total_hbond']  = hs_total_hbond
 
+    return summary
+
+
+def compute_contacts_from_pose(
+    pose: Pose,
+    peptide_len: int,
+    hotspot_positions: list[int],
+    binder_chain: str = 'A',
+    pmhc_chain:   str = 'B',
+) -> tuple[dict, list, list, list, list]:
+    """
+    Dump pose to a temp PDB, load with BioPython, compute contacts.
+    Used when a pre-relaxed PDB is not available.
+    Returns (summary_dict, all_cts, polar_cts, hydro_cts, hbond_cts).
+    """
+    with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        pose.dump_pdb(tmp_path)
+        binder_res, pmhc_res = get_residues_from_complex(
+            tmp_path, binder_chain=binder_chain, pmhc_chain=pmhc_chain
+        )
+    finally:
+        os.unlink(tmp_path)
+
+    pep_res = pmhc_res[-peptide_len:]
+
+    if not binder_res or not pep_res:
+        return {'n_all_contacts': 0, 'n_polar_contacts': 0,
+                'n_hydrophobic_contacts': 0, 'n_hbonds': 0,
+                'hbond_available': False}, [], [], [], []
+
+    all_cts, polar_cts, hydro_cts = compute_contacts(binder_res, pep_res)
+    has_H     = any(a.element == 'H'
+                    for res in binder_res for a in res.get_atoms())
+    hbond_cts = compute_hbonds(binder_res, pep_res) if has_H else []
+
+    summary = _contacts_summary(
+        binder_res, pep_res,
+        all_cts, polar_cts, hydro_cts, hbond_cts,
+        has_H, peptide_len, hotspot_positions,
+    )
     return summary, all_cts, polar_cts, hydro_cts, hbond_cts
 
 
@@ -625,16 +617,16 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
 def process_design(
     design: str,
     af3_out_dir: str,
-    relaxed_dir: str,
+    relaxed_pdb_dir: str,
     target_info: dict,
-    n_repeats: int,
-    no_relax: bool,
-    scorefxn_cst,
-    scorefxn_clean,
 ) -> tuple[dict, dict[str, list]]:
     """
     Returns (record_dict, contact_rows_dict).
     contact_rows_dict keys: 'all', 'polar', 'hydro', 'hbond'
+
+    CMS and DSSP run on the pre-relaxed PDB loaded into PyRosetta.
+    Contacts run on the same pre-relaxed PDB loaded via BioPython (contact_map).
+    ipSAE comes from AF3 confidences.json (coordinate-independent).
     """
     peptide_len       = target_info['peptide_len']
     hotspot_positions = target_info['hotspot_positions']
@@ -650,17 +642,17 @@ def process_design(
     record.update(get_top_level_confidences(af3_out_dir, design))
     record.update(get_top_ranking_score(af3_out_dir, design))
 
-    # ipSAE — PAE-based, before any coordinate modification
+    # ipSAE — PAE-based, coordinate-independent
     conf_path = find_top_seed_confidences(af3_out_dir, design)
     if conf_path:
         try:
             pae, tok = load_af3_pae(conf_path)
             if pae is not None:
-                unique_ch      = list(dict.fromkeys(tok))
-                pep_ch_pae     = unique_ch[2] if len(unique_ch) >= 3 else unique_ch[-1]
-                ipsae_scores   = compute_ipsae(pae, tok,
-                                               binder_chain='A',
-                                               peptide_chain=pep_ch_pae)
+                unique_ch    = list(dict.fromkeys(tok))
+                pep_ch_pae   = unique_ch[2] if len(unique_ch) >= 3 else unique_ch[-1]
+                ipsae_scores = compute_ipsae(pae, tok,
+                                             binder_chain='A',
+                                             peptide_chain=pep_ch_pae)
                 record.update(ipsae_scores)
                 print(f"    ipSAE: {ipsae_scores['ipsae_binder_peptide']:.4f}  "
                       f"(pep_chain={pep_ch_pae}, "
@@ -672,17 +664,18 @@ def process_design(
     else:
         print(f"    WARNING: top-seed confidences.json not found")
 
-    # Load CIF
-    cif_path = find_model_cif(af3_out_dir, design)
-    if not cif_path:
-        print(f"    ERROR: model CIF not found")
+    # Load pre-relaxed PDB
+    relaxed_pdb = os.path.join(relaxed_pdb_dir, f'{design}_relaxed.pdb')
+    if not os.path.exists(relaxed_pdb):
+        print(f"    ERROR: relaxed PDB not found: {relaxed_pdb}")
         return record, empty_rows
-    record['cif_path'] = cif_path
+    record['relaxed_pdb'] = relaxed_pdb
 
+    # Load into PyRosetta for CMS + DSSP
     try:
-        pose = load_cif(cif_path)
+        pose = pyrosetta.pose_from_pdb(relaxed_pdb)
     except Exception as e:
-        print(f"    ERROR loading CIF: {e}")
+        print(f"    ERROR loading relaxed PDB into PyRosetta: {e}")
         return record, empty_rows
 
     chain_ids = get_chain_ids(pose)
@@ -698,26 +691,6 @@ def process_design(
 
     print(f"    chains: {chain_ids}  iface: {interface}  "
           f"pep_chain: {pep_chain}  pep_len: {peptide_len}")
-
-    # FastRelax
-    score_before = scorefxn_clean(pose)
-    record['rosetta_score_before'] = round(score_before, 3)
-
-    if not no_relax:
-        try:
-            pose = run_fastrelax(pose, scorefxn_cst, n_repeats)
-            score_after = scorefxn_clean(pose)
-            record['rosetta_score_after'] = round(score_after, 3)
-            record['rosetta_score_delta'] = round(score_after - score_before, 3)
-            relaxed_pdb = os.path.join(relaxed_dir, f'{design}_relaxed.pdb')
-            pose.dump_pdb(relaxed_pdb)
-            record['relaxed_pdb'] = relaxed_pdb
-            print(f"    FastRelax: dE={record['rosetta_score_delta']:.1f}")
-        except Exception as e:
-            print(f"    WARNING: FastRelax failed: {e}")
-    else:
-        record['rosetta_score_after'] = score_before
-        record['rosetta_score_delta'] = 0.0
 
     # DSSP — binder chain only; single DsspMover call
     try:
@@ -741,33 +714,36 @@ def process_design(
     except Exception as e:
         print(f"    WARNING: CMS failed: {e}")
 
-    # Contacts — imported from contact_map.py via temp PDB
-    # pose.dump_pdb writes chain A (binder) and chain B (MHC+peptide)
-    # which matches get_residues_from_complex(binder_chain='A', pmhc_chain='B')
+    # Contacts — via contact_map.py, reads relaxed PDB directly with BioPython
+    # relaxed PDB is 2-chain: A=binder, B=MHC+peptide
     contact_rows = empty_rows
     try:
-        ct_summary, all_cts, polar_cts, hydro_cts, hbond_cts = \
-            compute_contacts_from_pose(pose, peptide_len=peptide_len,
-                                       hotspot_positions=hotspot_positions)
-        record.update(ct_summary)
-
-        # Rebuild binder/pep residue lists for row assembly (reuse temp PDB logic)
-        with tempfile.NamedTemporaryFile(suffix='.pdb', delete=False) as tmp:
-            tmp_path = tmp.name
-        try:
-            pose.dump_pdb(tmp_path)
-            binder_res_list, pmhc_res_list = get_residues_from_complex(tmp_path)
-        finally:
-            os.unlink(tmp_path)
+        binder_res_list, pmhc_res_list = get_residues_from_complex(
+            relaxed_pdb, binder_chain='A', pmhc_chain='B'
+        )
         pep_res_list = pmhc_res_list[-peptide_len:]
+
+        all_cts, polar_cts, hydro_cts = compute_contacts(binder_res_list, pep_res_list)
+        has_H     = any(a.element == 'H'
+                        for res in binder_res_list for a in res.get_atoms())
+        hbond_cts = compute_hbonds(binder_res_list, pep_res_list) if has_H else []
+
+        # Build summary directly from the loaded residue lists
+        # (mirrors compute_contacts_from_pose logic without the temp PDB write)
+        ct_summary = _contacts_summary(
+            binder_res_list, pep_res_list,
+            all_cts, polar_cts, hydro_cts, hbond_cts,
+            has_H, peptide_len, hotspot_positions,
+        )
+        record.update(ct_summary)
 
         contact_rows = contacts_to_rows(
             design, all_cts, polar_cts, hydro_cts, hbond_cts,
             binder_res_list, pep_res_list,
             hotspot_positions=hotspot_positions,
         )
-        hs_all   = ct_summary.get('n_contacts_hotspot_total_all',   0)
-        hs_polar = ct_summary.get('n_contacts_hotspot_total_polar',  0)
+        hs_all   = ct_summary.get('n_contacts_hotspot_total_all',  0)
+        hs_polar = ct_summary.get('n_contacts_hotspot_total_polar', 0)
         print(f"    Contacts: all={ct_summary['n_all_contacts']}  "
               f"polar={ct_summary['n_polar_contacts']}  "
               f"hydro={ct_summary['n_hydrophobic_contacts']}  "
@@ -789,20 +765,19 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument('--af3_out_dir',  required=True)
-    parser.add_argument('--out_dir',      required=True)
-    parser.add_argument('--targets_csv',  required=True,
+    parser.add_argument('--af3_out_dir',     required=True)
+    parser.add_argument('--relaxed_pdb_dir', required=True,
+        help='Directory containing {design}_relaxed.pdb files from FastRelax '
+             '(e.g. .../fastrelax_af3/relaxed_pdbs/)')
+    parser.add_argument('--out_dir',         required=True)
+    parser.add_argument('--targets_csv',     required=True,
         help='CSV: design, peptide_len, cms_hotspot_positions')
-    parser.add_argument('--designs',      nargs='*')
-    parser.add_argument('--n_repeats',    type=int, default=3)
-    parser.add_argument('--no_relax',     action='store_true')
-    parser.add_argument('--inspect',      metavar='DESIGN')
+    parser.add_argument('--designs',         nargs='*')
+    parser.add_argument('--inspect',         metavar='DESIGN')
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
-    relaxed_dir  = os.path.join(args.out_dir, 'relaxed_pdbs')
     contacts_dir = os.path.join(args.out_dir, 'contacts')
-    os.makedirs(relaxed_dir,  exist_ok=True)
     os.makedirs(contacts_dir, exist_ok=True)
 
     targets = load_targets(args.targets_csv)
@@ -812,17 +787,17 @@ def main():
 
     # Inspect mode
     if args.inspect:
-        d    = args.inspect
-        cif  = find_model_cif(args.af3_out_dir, d)
-        if not cif:
-            print(f"ERROR: no CIF for '{d}'"); return
-        pose   = load_cif(cif)
+        d           = args.inspect
+        relaxed_pdb = os.path.join(args.relaxed_pdb_dir, f'{d}_relaxed.pdb')
+        if not os.path.exists(relaxed_pdb):
+            print(f"ERROR: relaxed PDB not found: {relaxed_pdb}"); return
+        pose   = pyrosetta.pose_from_pdb(relaxed_pdb)
         chains = get_chain_ids(pose)
         conf   = find_top_seed_confidences(args.af3_out_dir, d)
         info   = targets.get(d, {})
-        print(f"\nDesign:    {d}")
-        print(f"CIF:       {cif}")
-        print(f"Chains:    {chains}  ->  {build_interface_string(chains)}")
+        print(f"\nDesign:      {d}")
+        print(f"Relaxed PDB: {relaxed_pdb}")
+        print(f"Chains:      {chains}  ->  {build_interface_string(chains)}")
         for ch in chains:
             sel = pyrosetta.rosetta.core.select.residue_selector.ChainSelector(ch)
             rv  = pyrosetta.rosetta.core.select.residue_selector.ResidueVector(
@@ -839,26 +814,24 @@ def main():
                 print(f"PAE: {pae.shape[0]}x{pae.shape[1]}  chains={cc}")
         return
 
-    # Discover designs
+    # Discover designs from relaxed PDB dir if not specified
     if args.designs:
         designs = args.designs
     else:
-        designs = find_designs(args.af3_out_dir)
+        pdbs    = glob.glob(os.path.join(args.relaxed_pdb_dir, '*_relaxed.pdb'))
+        designs = sorted(os.path.basename(p).replace('_relaxed.pdb', '') for p in pdbs)
         unknown = [d for d in designs if d not in targets]
         if unknown:
-            print(f"WARNING: {len(unknown)} dirs not in targets CSV "
+            print(f"WARNING: {len(unknown)} relaxed PDBs not in targets CSV "
                   f"(fallback pep_len={DEFAULT_PEPTIDE_LEN}): {unknown}")
 
     print(f"Processing {len(designs)} designs\n")
 
-    scorefxn_cst   = make_scorefxn(with_cst=True)
-    scorefxn_clean = make_scorefxn(with_cst=False)
-
-    records         = []
-    all_ct_rows     = []
-    polar_ct_rows   = []
-    hydro_ct_rows   = []
-    hbond_ct_rows   = []
+    records       = []
+    all_ct_rows   = []
+    polar_ct_rows = []
+    hydro_ct_rows = []
+    hbond_ct_rows = []
 
     for idx, design in enumerate(designs):
         print(f"[{idx+1}/{len(designs)}] {design}")
@@ -867,14 +840,10 @@ def main():
             'hotspot_positions': [],
         })
         rec, ct_rows = process_design(
-            design         = design,
-            af3_out_dir    = args.af3_out_dir,
-            relaxed_dir    = relaxed_dir,
-            target_info    = info,
-            n_repeats      = args.n_repeats,
-            no_relax       = args.no_relax,
-            scorefxn_cst   = scorefxn_cst,
-            scorefxn_clean = scorefxn_clean,
+            design          = design,
+            af3_out_dir     = args.af3_out_dir,
+            relaxed_pdb_dir = args.relaxed_pdb_dir,
+            target_info     = info,
         )
         records.append(rec)
         all_ct_rows   .extend(ct_rows['all'])
