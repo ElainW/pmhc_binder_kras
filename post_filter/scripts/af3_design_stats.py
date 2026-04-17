@@ -8,7 +8,7 @@ Computes four analysis metrics on AF3-predicted pMHC-minibinder structures:
   2. ipSAE  — binder<->peptide ipSAE from AF3 PAE matrix
               (top-ranked seed's confidences.json — coordinate-independent)
   3. DSSP   — secondary structure of BINDER CHAIN ONLY
-              (% helix / sheet / loop, counts, full SS string, on relaxed structure)
+              (% helix / sheet / loop, counts, full SS string)
   4. Contacts — all / polar / hydrophobic / H-bond contacts between binder
                 and peptide, imported directly from contact_map.py
 
@@ -43,7 +43,7 @@ Usage:
         --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \
         --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/ \
-        --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv
+        --targets_csv     /path/to/design_targets.csv
 
     # Specific designs:
     python af3_design_stats.py ... --designs ctnnb1-15 gp100-3 mart1-3
@@ -80,9 +80,10 @@ from pyrosetta.rosetta.protocols.moves import DsspMover
 from contact_map import (
     compute_contacts,
     compute_hbonds,
+    get_residues,
     get_residues_from_complex,
     THREE_TO_ONE,
-    PEPTIDE_LEN as CM_PEPTIDE_LEN,   # used only as a sanity reference
+    PEPTIDE_LEN as CM_PEPTIDE_LEN,
 )
 
 
@@ -620,7 +621,6 @@ def process_design(
         'peptide_len':       peptide_len,
         'hotspot_positions': ','.join(str(p) for p in hotspot_positions),
     }
-
     af3_out_dir_full = "Empty"
     # accommodate alternative af3_out_dir
     for out_dir in glob.glob(f"{af3_out_dir}/{design}*"):
@@ -703,14 +703,14 @@ def process_design(
     except Exception as e:
         print(f"    WARNING: CMS failed: {e}")
 
-    # Contacts — via contact_map.py, reads relaxed PDB directly with BioPython
-    # relaxed PDB is 2-chain: A=binder, B=MHC+peptide
+    # Contacts — via contact_map.py, reads relaxed PDB directly with BioPython.
+    # The relaxed PDB has 3 chains: A=binder, B=MHC, C=peptide (separate chains,
+    # not merged). get_residues_from_complex only reads two chains, so load the
+    # peptide chain C explicitly using get_residues() and pass it directly.
     contact_rows = empty_rows
     try:
-        binder_res_list, pmhc_res_list = get_residues_from_complex(
-            relaxed_pdb, binder_chain='A', pmhc_chain='B'
-        )
-        pep_res_list = pmhc_res_list[-peptide_len:]
+        binder_res_list = get_residues(relaxed_pdb, 'A')
+        pep_res_list    = get_residues(relaxed_pdb, pep_chain)
 
         all_cts, polar_cts, hydro_cts = compute_contacts(binder_res_list, pep_res_list)
         has_H     = any(a.element == 'H'
