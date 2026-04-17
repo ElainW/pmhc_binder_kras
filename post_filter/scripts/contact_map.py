@@ -300,7 +300,7 @@ def plot_backbone_group_heatmaps(group_id: str,
     show_hbond = hbond_counts is not None and hbond_counts.max() > 0
     n_panels   = 4 if show_hbond else 3
     fig, axes  = plt.subplots(1, n_panels,
-                               figsize=(6 * n_panels, max(6, max_len // 5)),
+                               figsize=(3 * n_panels, min(5, max_len // 5)),
                                sharey=True)
 
     panels = [
