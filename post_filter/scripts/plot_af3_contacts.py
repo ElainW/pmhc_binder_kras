@@ -6,24 +6,25 @@ from the contact TSVs written by af3_design_stats.py.
 
 One PNG per design with 4 panels:
   - All contacts       (any heavy atom < 4.0 A)
-  - Polar contacts     (N/O donor-acceptor < 4.0 A)
+  - Polar contacts     (N/O donor-acceptor < 3.5 A)
   - Hydrophobic        (hydrophobic peptide residue < 4.0 A)
   - H-bonds            (D-H...A geometry, only when H atoms present)
 
 X-axis: peptide positions labeled p{i}\n{AA} using actual peptide sequence
-         from design_epitopes.csv. Hotspot positions highlighted in blue.
-Y-axis: binder residue position (0-indexed, matching binder_pos_0idx in TSVs).
+         from design_epitopes.csv. Hotspot positions highlighted with blue borders.
+Y-axis: binder residue position (0-indexed). True binder length read from
+         af3_design_stats.tsv (n_binder_res column from DSSP).
 
 Usage:
     python plot_af3_contacts.py \
         --contacts_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/contacts/ \
         --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
-        --designs ctnnb1-15 gp100-3 mart1-3
+        --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_design_stats.tsv
 
-    # All designs found in contacts_dir:
+    # Specific designs only:
     python plot_af3_contacts.py \
-        --contacts_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/contacts/ \
-        --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv
+        --contacts_dir ... --epitopes_csv ... --stats_tsv ... \
+        --designs ctnnb1-15 gp100-3 mart1-3
 """
 
 import os
@@ -38,7 +39,7 @@ import matplotlib.patches as mpatches
 
 
 ALL_CONTACT_DIST         = 4.0
-POLAR_CONTACT_DIST       = 4.0
+POLAR_CONTACT_DIST       = 3.5
 HYDROPHOBIC_CONTACT_DIST = 4.0
 
 
@@ -67,12 +68,25 @@ def load_epitopes(csv_path: str) -> dict:
     return out
 
 
+def load_binder_lengths(stats_tsv: str) -> dict[str, int]:
+    """
+    Read true binder lengths from af3_design_stats.tsv (n_binder_res from DSSP).
+    Returns {design: n_binder_res}.
+    """
+    df = pd.read_csv(stats_tsv, sep='\t')
+    if 'n_binder_res' not in df.columns:
+        print("WARNING: n_binder_res not found in stats TSV — "
+              "binder length will be inferred from contacts TSV")
+        return {}
+    return dict(zip(df['design'].astype(str), df['n_binder_res'].astype(int)))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Build count matrices from TSVs
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_count_matrix(df: pd.DataFrame, n_binder: int,
-                        n_pep: int) -> np.ndarray:
+                       n_pep: int) -> np.ndarray:
     """
     Build (n_binder x n_pep) count matrix from a contact TSV subset.
     Uses binder_pos_0idx (0-based) and pep_pos_1idx (1-based).
@@ -80,7 +94,7 @@ def build_count_matrix(df: pd.DataFrame, n_binder: int,
     mat = np.zeros((n_binder, n_pep), dtype=int)
     for _, row in df.iterrows():
         bi = int(row['binder_pos_0idx'])
-        pi = int(row['pep_pos_1idx']) - 1   # convert to 0-based
+        pi = int(row['pep_pos_1idx']) - 1
         if 0 <= bi < n_binder and 0 <= pi < n_pep:
             mat[bi, pi] += 1
     return mat
@@ -114,7 +128,7 @@ def plot_design_contacts(
     if n_panels == 1:
         axes = [axes]
 
-    pep_labels = [f'p{i+1}\n{peptide[i]}' for i in range(n_pep)]
+    pep_labels  = [f'p{i+1}\n{peptide[i]}' for i in range(n_pep)]
     hotspot_set = set(hotspot_positions)
 
     panels = [
@@ -137,7 +151,7 @@ def plot_design_contacts(
         ax.set_xlabel('Peptide position', fontsize=11)
         ax.set_title(title, fontsize=10)
 
-        # Highlight hotspot columns with blue border
+        # Highlight hotspot columns with blue borders
         for pos in hotspot_positions:
             pi = pos - 1
             if 0 <= pi < n_pep:
@@ -177,6 +191,8 @@ def main():
     parser.add_argument('--epitopes_csv', required=True,
         help='design_epitopes.csv with columns: design, peptide, peptide_len, '
              'cms_hotspot_positions, target_name')
+    parser.add_argument('--stats_tsv', required=True,
+        help='af3_design_stats.tsv — provides true binder length (n_binder_res)')
     parser.add_argument('--designs', nargs='*',
         help='Designs to plot (default: all in all_contacts.tsv)')
     args = parser.parse_args()
@@ -192,7 +208,8 @@ def main():
     df_hydro = pd.read_csv(hydro_tsv, sep='\t') if os.path.exists(hydro_tsv) else pd.DataFrame()
     df_hbond = pd.read_csv(hbond_tsv, sep='\t') if os.path.exists(hbond_tsv) else pd.DataFrame()
 
-    epitopes = load_epitopes(args.epitopes_csv)
+    epitopes       = load_epitopes(args.epitopes_csv)
+    binder_lengths = load_binder_lengths(args.stats_tsv)
 
     # Discover designs
     if args.designs:
@@ -216,6 +233,15 @@ def main():
         hotspot_positions = info['hotspot_positions']
         target_name       = info['target_name']
 
+        # True binder length: prefer stats TSV, fall back to contacts TSV
+        if design in binder_lengths:
+            n_binder = binder_lengths[design]
+        else:
+            sub = df_all[df_all['design'] == design] if not df_all.empty else pd.DataFrame()
+            n_binder = int(sub['binder_pos_0idx'].max()) + 1 if not sub.empty else 0
+            print(f"  WARNING: {design} not in stats TSV, "
+                  f"inferring binder len={n_binder} from contacts")
+
         # Subset each TSV to this design
         sub_all   = df_all  [df_all  ['design'] == design] if not df_all  .empty else pd.DataFrame()
         sub_polar = df_polar[df_polar['design'] == design] if not df_polar.empty else pd.DataFrame()
@@ -226,10 +252,7 @@ def main():
             print(f"  WARNING: {design} has no contacts — skipping plot")
             continue
 
-        # Determine binder length from max binder_pos_0idx + 1
-        n_binder = int(sub_all['binder_pos_0idx'].max()) + 1
-
-        # Build count matrices
+        # Build count matrices using true binder length
         all_mat   = build_count_matrix(sub_all,   n_binder, n_pep)
         polar_mat = build_count_matrix(sub_polar, n_binder, n_pep)
         hydro_mat = build_count_matrix(sub_hydro, n_binder, n_pep)
