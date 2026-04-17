@@ -55,4 +55,4 @@ post_filter/scripts/af3/__pycache__/
 post_filter/slurm/
 post_filter/scripts/.ipynb_checkpoints/
 post_filter/scripts/af3/slurm*
-*/__pycache__/
+post_filter/scripts/__pycache__/
