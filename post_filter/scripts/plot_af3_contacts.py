@@ -39,7 +39,7 @@ import matplotlib.patches as mpatches
 
 
 ALL_CONTACT_DIST         = 4.0
-POLAR_CONTACT_DIST       = 3.5
+POLAR_CONTACT_DIST       = 4.0
 HYDROPHOBIC_CONTACT_DIST = 4.0
 
 
@@ -122,7 +122,7 @@ def plot_design_contacts(
     n_panels = 4 if has_hbond else 3
     fig, axes = plt.subplots(
         1, n_panels,
-        figsize=(5 * n_panels, max(5, n_binder // 4)),
+        figsize=(3 * n_panels, min(5, n_binder // 4)),
         sharey=True,
     )
     if n_panels == 1:
