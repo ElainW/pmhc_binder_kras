@@ -39,11 +39,11 @@ Chain convention in AF3 CIF:
   A = binder,  B = MHC alpha,  C = peptide,  [D = B2M]
 
 Usage:
-    python af3_design_stats.py \\
+    python af3_design_stats.py \
         --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \
         --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/ \
-        --targets_csv     /path/to/design_targets.csv
+        --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv
 
     # Specific designs:
     python af3_design_stats.py ... --designs ctnnb1-15 gp100-3 mart1-3
@@ -149,37 +149,20 @@ def find_designs(af3_out_dir: str) -> list[str]:
     )
 
 
-def find_model_cif(af3_out_dir: str, design: str) -> str | None:
-    design_dir = os.path.join(af3_out_dir, design)
-    top = os.path.join(design_dir, f'{design}_model.cif')
-    if os.path.exists(top):
-        return top
-    ranking = os.path.join(design_dir, 'ranking_scores.csv')
-    if os.path.exists(ranking):
-        df  = pd.read_csv(ranking)
-        row = df.sort_values('ranking_score', ascending=False).iloc[0]
-        p   = os.path.join(design_dir,
-                           f'seed-{int(row["seed"])}_sample-{int(row["sample"])}',
-                           'model.cif')
-        if os.path.exists(p):
-            return p
-    return None
-
-
-def find_top_seed_confidences(af3_out_dir: str, design: str) -> str | None:
-    ranking = os.path.join(af3_out_dir, design, 'ranking_scores.csv')
+def find_top_seed_confidences(af3_out_dir: str) -> str | None:
+    ranking = os.path.join(af3_out_dir, 'ranking_scores.csv')
     if not os.path.exists(ranking):
         return None
     df  = pd.read_csv(ranking)
     row = df.sort_values('ranking_score', ascending=False).iloc[0]
-    p   = os.path.join(af3_out_dir, design,
+    p   = os.path.join(af3_out_dir,
                        f'seed-{int(row["seed"])}_sample-{int(row["sample"])}',
                        'confidences.json')
     return p if os.path.exists(p) else None
 
 
 def get_top_level_confidences(af3_out_dir: str, design: str) -> dict:
-    path = os.path.join(af3_out_dir, design, f'{design}_confidences.json')
+    path = os.path.join(af3_out_dir, f'{design}_confidences.json')
     if not os.path.exists(path):
         return {}
     try:
@@ -195,7 +178,7 @@ def get_top_level_confidences(af3_out_dir: str, design: str) -> dict:
 
 
 def get_top_ranking_score(af3_out_dir: str, design: str) -> dict:
-    path = os.path.join(af3_out_dir, design, 'ranking_scores.csv')
+    path = os.path.join(af3_out_dir, 'ranking_scores.csv')
     if not os.path.exists(path):
         return {}
     try:
@@ -638,12 +621,18 @@ def process_design(
         'hotspot_positions': ','.join(str(p) for p in hotspot_positions),
     }
 
+    af3_out_dir_full = "Empty"
+    # accommodate alternative af3_out_dir
+    for out_dir in glob.glob(f"{af3_out_dir}/{design}*"):
+        if os.path.join(out_dir, f"{design}_confidences.json"):
+            af3_out_dir_full = out_dir
+
     # AF3 summary metrics
-    record.update(get_top_level_confidences(af3_out_dir, design))
-    record.update(get_top_ranking_score(af3_out_dir, design))
+    record.update(get_top_level_confidences(af3_out_dir_full, design))
+    record.update(get_top_ranking_score(af3_out_dir_full, design))
 
     # ipSAE — PAE-based, coordinate-independent
-    conf_path = find_top_seed_confidences(af3_out_dir, design)
+    conf_path = find_top_seed_confidences(af3_out_dir_full)
     if conf_path:
         try:
             pae, tok = load_af3_pae(conf_path)
@@ -662,7 +651,7 @@ def process_design(
         except Exception as e:
             print(f"    WARNING: ipSAE failed: {e}")
     else:
-        print(f"    WARNING: top-seed confidences.json not found")
+        print(f"    WARNING: top-seed confidences.json not found at {conf_path}")
 
     # Load pre-relaxed PDB
     relaxed_pdb = os.path.join(relaxed_pdb_dir, f'{design}_relaxed.pdb')
