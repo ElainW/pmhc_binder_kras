@@ -878,8 +878,8 @@ def main():
     )
     ct_pos_cols = sorted(
         [c for c in df.columns
-         if c.startswith('contacts_') and '_p' in c],
-        key=lambda x: (x.split('_p')[0], int(x.split('_p')[1]))
+         if re.match(r'^contacts_(all|polar|hydro|hbond)_p\d+$', c)],
+        key=lambda x: (re.sub(r'_p\d+$', '', x), int(re.search(r'_p(\d+)$', x).group(1)))
     )
     ros_cols   = ['rosetta_score_before', 'rosetta_score_after',
                   'rosetta_score_delta']
