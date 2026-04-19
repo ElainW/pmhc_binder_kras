@@ -31,6 +31,7 @@ OUT_PLOT="${PIPELINE_DIR}/dssp_summary_plot.pdf"
 
 # ── Setup ─────────────────────────────────────────────────────
 mkdir -p "${PDB_DIR}" "${LOGS_DIR}"
+module load conda/miniforge3/24.11.3-0
 source activate "${CONDA_ENV}" 2>/dev/null || conda activate "${CONDA_ENV}"
 
 echo "=========================================="
