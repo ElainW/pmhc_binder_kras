@@ -24,7 +24,8 @@ python generate_af3_jobs.py \
     --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/af3 \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
-    --peptide_chain C
+    --peptide_chain C \
+    --skip orient_88_pt20__32_sample08 orient_255_pt12__2_sample08 orient_255_pt12__27_sample04 orient_255_pt12__33_sample07 orient_255_pt12__2_sample01 orient_255_pt12__9_sample08 orient_255_pt12__33_sample03 orient_255_pt12__66_sample08 orient_255_pt12__2_sample03 orient_255_pt12__11_sample07 orient_255_pt12__33_sample04 orient_255_pt12__70_sample02 orient_255_pt12__2_sample06 orient_255_pt12__27_sample02 orient_255_pt12__33_sample05 orient_255_pt12__2_sample07 orient_255_pt12__27_sample03 orient_255_pt12__33_sample06
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design becomes one JSON file. Chain layout is flexible:
@@ -218,7 +219,7 @@ def main():
     print(f"Written {len(designs)} JSON files → {args.output_json_dir}\n")
 
 #     # ── Submit SLURM jobs ─────────────────────────────────────────────────────
-    skip_set = set(args.skip or [])
+    skip_set = {s.lower() for s in (args.skip or [])}
 
     for name in sorted(designs.keys()):
         if name in skip_set:
