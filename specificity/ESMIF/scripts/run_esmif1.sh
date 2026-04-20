@@ -1,6 +1,6 @@
 #!/bin/bash
 module load conda/miniforge3/24.11.3-0
-mamba activate /n/groups/marks/users/aaron/pmhc/env/esm
+mamba activate /n/groups/marks/users/aaron/pmhc/envs/esm
 
 export model_checkpoint=/n/groups/marks/users/aaron/pmhc/specificity/ESMIF/inputs/esm_if1_gvp4_t16_142M_UR50.pt
 
