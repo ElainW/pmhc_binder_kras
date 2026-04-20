@@ -19,7 +19,7 @@ python run_mpnn_with_charge_filter.py \
     --omit_AAs      C \
     --design_chains A \
     --min_charge    -2.0 \
-    --max_attempts  5
+    --max_attempts  20
 """
 
 import os
