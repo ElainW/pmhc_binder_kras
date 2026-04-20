@@ -41,10 +41,10 @@ echo "=========================================="
 
 # ── Step 1: Fetch PDB IDs and download experimental structures ──
 echo ""
-echo "Step 1: Fetching synthetic protein PDB IDs from RCSB and downloading PDBs..."
+echo "Step 1: Downloading PDBs for the 102 synthetic proteins from RCSB..."
 python "${SCRIPTS_DIR}/fetch_synthetic_ids.py" \
+    --ids "${PIPELINE_DIR}/synthetic_ids.txt" \
     --outdir "${PDB_DIR}" \
-    --max 500 \
     --manifest "${MANIFEST}"
 
 N_PDB=$(wc -l < "${MANIFEST}")
