@@ -2,7 +2,7 @@
 
 #SBATCH --partition=short
 #SBATCH -c 10
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --mem=5G
 
 module load alphafold/3.0.1
