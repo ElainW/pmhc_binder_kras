@@ -187,10 +187,10 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
         vals = df[col].values
         # Color: green = better, red = worse
         if lower_better:
-            norm_vals = (vals - vals.min()) / (vals.ptp() + 1e-9)
+            norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
             colors = plt.cm.RdYlGn_r(norm_vals)
         else:
-            norm_vals = (vals - vals.min()) / (vals.ptp() + 1e-9)
+            norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
             colors = plt.cm.RdYlGn(norm_vals)
 
         ax.barh(labels, vals, color=colors, edgecolor='white')
