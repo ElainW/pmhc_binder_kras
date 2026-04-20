@@ -56,3 +56,7 @@ post_filter/slurm/
 post_filter/scripts/.ipynb_checkpoints/
 post_filter/scripts/af3/slurm*
 post_filter/scripts/__pycache__/
+
+dssp_synthetic/pdbs/
+dssp_synthetic/dssp_per_residue.tsv
+dssp_synthetic/synthetic_manifest.tsv
