@@ -19,6 +19,13 @@ python generate_af3_jobs.py \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
     --peptide_chain C
 
+python generate_af3_jobs.py \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta \
+    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/af3 \
+    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
+    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --peptide_chain C
+
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design becomes one JSON file. Chain layout is flexible:
 
@@ -210,7 +217,7 @@ def main():
 
     print(f"Written {len(designs)} JSON files → {args.output_json_dir}\n")
 
-    # ── Submit SLURM jobs ─────────────────────────────────────────────────────
+#     # ── Submit SLURM jobs ─────────────────────────────────────────────────────
     skip_set = set(args.skip or [])
 
     for name in sorted(designs.keys()):
