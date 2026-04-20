@@ -24,7 +24,7 @@ import pandas as pd
 # ── Fixed sequences ───────────────────────────────────────────────────────────
 
 MHC_ALPHA = (
-    "GSHSMRYFYTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMEPRAPWIEQEGPEYWDQETRNVKAQ"
+    "GSHSMRYFYTSVSRPGRGEPRFIAVGYVDDTQFVRFDSDAASQRMLEPRAPWIEQEGPEYWDQETRNVKAQ"
     "SQTDRVDLGTLRGYYNQSEDGSHTIQIMYGCDVGPDGRFLRGYRQDAYDGKDYIALNEDLRSWTAADMAAQ"
     "ITKRKWEAAHAAEQQRAYLEGRCVEWLRRYLENGKETLQRTDPPKTHMTHHPISDHEATLRCWALGFYPAEI"
     "TLTWQRDGEDQTQDTELVETRPAGDGTFQKWAAVVVPSGEEQRYTCHVQHEGLPKPLTLRWE"
@@ -39,7 +39,7 @@ B2M = (
 
 # Strip design suffix for FASTA header — drop trailing _af2pred
 def header_name(design: str) -> str:
-    return design.removesuffix('_af2pred')
+    return design.removesuffix('_af2pred').lower()
 
 
 def main():
