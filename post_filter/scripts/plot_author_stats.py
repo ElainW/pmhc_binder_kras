@@ -71,7 +71,7 @@ def plot_charge_cysteine(df_epi: pd.DataFrame, df_xlsx: pd.DataFrame,
     df = pd.DataFrame(rows).sort_values('net_charge')
     labels = [design_label(d) for d in df['design']]
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
     # Net charge bar
     ax = axes[0]
@@ -85,18 +85,27 @@ def plot_charge_cysteine(df_epi: pd.DataFrame, df_xlsx: pd.DataFrame,
         ax.text(val - 0.2, bar.get_y() + bar.get_height() / 2,
                 f'{val:.1f}', va='center', ha='right', fontsize=8)
 
-    # Cys + Met count scatter
+      # Cys + Met count scatter - stagger offsets to reduce label overlap
     ax = axes[1]
     ax.scatter(df['n_met'], df['n_cys'], s=80, color='#8e44ad', edgecolors='white',
                linewidth=0.5, zorder=3)
-    for _, r in df.iterrows():
-        ax.annotate(design_label(r['design']),
-                    (r['n_met'], r['n_cys']),
-                    fontsize=7, ha='left', va='bottom',
-                    xytext=(3, 3), textcoords='offset points')
+    try:
+        from adjustText import adjust_text
+        texts = [ax.text(r['n_met'], r['n_cys'], design_label(r['design']),
+                         fontsize=7) for _, r in df.iterrows()]
+        adjust_text(texts, ax=ax,
+                    arrowprops=dict(arrowstyle='-', color='grey', lw=0.5))
+    except ImportError:
+        for i_pt, (_, r) in enumerate(df.iterrows()):
+            dy = 6 if i_pt % 2 == 0 else -11
+            dx = 4 if i_pt % 3 != 2 else -44
+            ax.annotate(design_label(r['design']),
+                        (r['n_met'], r['n_cys']),
+                        fontsize=7, ha='left', va='bottom',
+                        xytext=(dx, dy), textcoords='offset points')
     ax.set_xlabel('Number of Met residues', fontsize=11)
     ax.set_ylabel('Number of Cys residues', fontsize=11)
-    ax.set_title('Cys and Met counts\n(both omitted in ProteinMPNN by default)',
+    ax.set_title('Cys and Met counts\n(Cys omitted in ProteinMPNN by default)',
                  fontsize=11)
     ax.axhline(0, color='grey', lw=0.5, ls='--')
 
@@ -121,7 +130,7 @@ def plot_secondary_structure(df_stats: pd.DataFrame, out_path: str):
     df = df.sort_values('ss_helix_pct', ascending=True)
     labels = [design_label(d) for d in df['design']]
 
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(8, 6))
     x = np.arange(len(df))
     w = 0.6
     ax.barh(x, df['ss_helix_pct'], w, label='Helix', color='#2980b9')
@@ -141,7 +150,7 @@ def plot_secondary_structure(df_stats: pd.DataFrame, out_path: str):
 
     # Annotate n_binder_res
     for i, (_, row) in enumerate(df.iterrows()):
-        ax.text(101, i, f'n={int(row["n_binder_res"])}',
+        ax.text(101, i, f'n={int(row["n_binder_res"])}  loop={row["ss_loop_pct"]:.1f}%',
                 va='center', fontsize=7, color='grey')
 
     if FLAGGED:
@@ -174,16 +183,24 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
 
     # Sort designs consistently by dG_separated
     df = df_fr.dropna(subset=['dG_separated']).copy()
-    df = df.sort_values('dG_separated')
+    df = df.sort_values(by='design', ascending=False)
     labels = [design_label(d) for d in df['design']]
 
     fig, axes = plt.subplots(3, 3, figsize=(16, 14), sharey=True)
     axes = axes.flatten()
 
     for ax, (col, title, lower_better) in zip(axes, metrics):
+        actual_col = col
         if col not in df.columns:
-            ax.set_visible(False)
-            continue
+            variants = [c for c in df.columns
+                        if c.replace('/','').replace('x','X') ==
+                           col.replace('/','').replace('x','X')]
+            if variants:
+                actual_col = variants[0]
+            else:
+                ax.set_visible(False)
+                continue
+        col = actual_col
         vals = df[col].values
         # Color: green = better, red = worse
         if lower_better:
@@ -193,7 +210,11 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
             norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
             colors = plt.cm.RdYlGn(norm_vals)
 
-        ax.barh(labels, vals, color=colors, edgecolor='white')
+        bars = ax.barh(labels, vals, color=colors, edgecolor='white')
+        vrange2 = vals.max() - vals.min()
+        for bar, val in zip(bars, vals):
+            ax.text(val + vrange2 * 0.01, bar.get_y() + bar.get_height() / 2,
+                    f'{val:.2f}', va='center', fontsize=6)
         ax.set_title(title, fontsize=10)
         ax.tick_params(axis='y', labelsize=7)
         ax.axvline(np.median(vals), color='black', lw=1, ls='--',
@@ -241,7 +262,7 @@ def plot_cms_heatmap(df_stats: pd.DataFrame, df_epi: pd.DataFrame,
     df = df.sort_values(['target_name', 'design'])
 
     n_designs = len(df)
-    fig, ax = plt.subplots(figsize=(max_pep * 0.9 + 3, n_designs * 0.55 + 2))
+    fig, ax = plt.subplots(figsize=(max_pep * 0.3 + 3, n_designs * 0.3 + 2))
 
     mat = np.zeros((n_designs, max_pep))
     for i, (_, row) in enumerate(df.iterrows()):
@@ -322,10 +343,10 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
                   'af3_iptm', 'af3_ranking_score']],
         on='design', how='outer'
     )
-    df = df.sort_values('monomer_plddt', ascending=False)
+    df = df.sort_values(by='design', ascending=False)
     labels = [design_label(d) for d in df['design']]
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 7), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(12, 5), sharey=True)
 
     # AF2 monomer pLDDT
     ax = axes[0]
@@ -360,7 +381,11 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
     ax = axes[2]
     nc_vals = df['ipsae_n_contacts'].fillna(0)
     colors = ['#e74c3c' if d in FLAGGED else '#9b59b6' for d in df['design']]
-    ax.barh(labels, nc_vals, color=colors, edgecolor='white')
+    bars = ax.barh(labels, nc_vals, color=colors, edgecolor='white')
+    for bar, val in zip(bars, nc_vals):
+        ax.text(val + nc_vals.max() * 0.01,
+                bar.get_y() + bar.get_height() / 2,
+                f'{int(val)}', va='center', fontsize=7)
     ax.set_xlabel('ipSAE n_contacts (PAE < 12 Å)', fontsize=11)
     ax.set_title('ipSAE contact pairs\n(binder–peptide, cutoff 12 Å)', fontsize=11)
 
@@ -390,7 +415,7 @@ def main():
     parser.add_argument('--epitopes_csv',   required=True,
         help='design_epitopes.csv')
     parser.add_argument('--xlsx',           required=True,
-        help='science_adv0185_data_s1.xlsx (for binder sequences)')
+        help='science_adv0185_data_s1.csv (for binder sequences)')
     parser.add_argument('--plddt_tsv',      required=True,
         help='TSV with columns: description, monomer_plddt')
     parser.add_argument('--out_dir',        required=True)
@@ -402,7 +427,7 @@ def main():
     df_stats = pd.read_csv(args.stats_tsv,     sep='\t')
     df_fr    = pd.read_csv(args.fastrelax_tsv, sep='\t')
     df_epi   = pd.read_csv(args.epitopes_csv)
-    df_xlsx  = pd.read_csv(args.xlsx, sep=",")
+    df_xlsx  = pd.read_csv(args.xlsx,          sep=",")
     df_plddt = pd.read_csv(args.plddt_tsv, sep='\t')
 
     # Normalise xlsx binder name column
