@@ -173,23 +173,73 @@ def filter_by_length(entity_id: str, min_len: int = 20, max_len: int = 400) -> i
         return None
 
 
+def mmcif_to_pdb(cif_path: Path, pdb_path: Path) -> bool:
+    """
+    Convert mmCIF to PDB using BioPython MMCIFParser + PDBIO.
+    Returns True on success. Newer RCSB entries are often mmCIF-only.
+    """
+    try:
+        from Bio.PDB import MMCIFParser, PDBIO
+        parser = MMCIFParser(QUIET=True)
+        structure = parser.get_structure(pdb_path.stem, str(cif_path))
+        io = PDBIO()
+        io.set_structure(structure)
+        io.save(str(pdb_path))
+        return pdb_path.exists() and pdb_path.stat().st_size > 0
+    except Exception as e:
+        print(f"  WARNING: mmCIF→PDB conversion failed for {cif_path.name}: {e}",
+              file=sys.stderr)
+        return False
+
+
 def download_pdb(pdb_id: str, outdir: Path) -> Path | None:
-    """Download PDB file from RCSB. Returns path or None on failure."""
+    """
+    Download experimental structure from RCSB.
+    Strategy:
+      1. Try .pdb format directly (most entries).
+      2. On 404, fall back to .cif (mmCIF) and convert to PDB via BioPython.
+    Returns path to .pdb file or None on complete failure.
+    """
     pdb_id = pdb_id.upper()
     outpath = outdir / f"{pdb_id}.pdb"
 
-    if outpath.exists():
+    if outpath.exists() and outpath.stat().st_size > 0:
         return outpath  # already downloaded
 
-    url = RCSB_PDB_DOWNLOAD.format(pdb_id=pdb_id)
-    req = urllib.request.Request(url, headers={"User-Agent": "python/3.11"})
+    # ── Attempt 1: PDB format ────────────────────────────────
+    url_pdb = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+    req = urllib.request.Request(url_pdb, headers={"User-Agent": "python/3.11"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             content = resp.read()
-        outpath.write_bytes(content)
-        return outpath
+        if len(content) > 100:          # sanity: non-empty file
+            outpath.write_bytes(content)
+            return outpath
     except urllib.error.HTTPError as e:
-        print(f"  WARNING: Could not download {pdb_id}: {e}", file=sys.stderr)
+        if e.code != 404:
+            print(f"  WARNING: {pdb_id} PDB download error {e.code}", file=sys.stderr)
+            return None
+        # 404 → fall through to mmCIF
+
+    # ── Attempt 2: mmCIF format → convert to PDB ─────────────
+    url_cif = f"https://files.rcsb.org/download/{pdb_id}.cif"
+    cif_path = outdir / f"{pdb_id}.cif"
+    req2 = urllib.request.Request(url_cif, headers={"User-Agent": "python/3.11"})
+    try:
+        with urllib.request.urlopen(req2, timeout=30) as resp:
+            content = resp.read()
+        cif_path.write_bytes(content)
+    except urllib.error.HTTPError as e:
+        print(f"  WARNING: Could not download {pdb_id} as PDB or mmCIF: {e}",
+              file=sys.stderr)
+        return None
+
+    success = mmcif_to_pdb(cif_path, outpath)
+    cif_path.unlink(missing_ok=True)    # clean up .cif after conversion
+    if success:
+        print(f"  INFO: {pdb_id} downloaded as mmCIF and converted to PDB", flush=True)
+        return outpath
+    else:
         return None
 
 
