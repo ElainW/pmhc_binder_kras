@@ -57,6 +57,8 @@ def design_label(name: str) -> str:
 def plot_charge_cysteine(df_epi: pd.DataFrame, df_seq: pd.DataFrame,
                          out_path: str):
     # Merge sequences from sequences file into epitopes
+    df_seq['name'] = df_seq['name'].str.removesuffix("_af2pred")
+    df_seq['name'] = df_seq['name'].str.lower()
     xlsx_seq = df_seq[df_seq['source']=='your_designs'].set_index('name')['sequence'].to_dict()
     rows = []
     for _, row in df_epi.iterrows():
@@ -68,10 +70,11 @@ def plot_charge_cysteine(df_epi: pd.DataFrame, df_seq: pd.DataFrame,
             'n_cys':      seq.count('C'),
             'n_met':      seq.count('M'),
         })
+    print()
     df = pd.DataFrame(rows).sort_values('net_charge')
     labels = [design_label(d) for d in df['design']]
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(10, len(labels)*0.25))
 
     # Net charge bar
     ax = axes[0]
@@ -130,7 +133,7 @@ def plot_secondary_structure(df_stats: pd.DataFrame, out_path: str):
     df = df.sort_values('ss_helix_pct', ascending=True)
     labels = [design_label(d) for d in df['design']]
 
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(8, 7))
     x = np.arange(len(df))
     w = 0.6
     ax.barh(x, df['ss_helix_pct'], w, label='Helix', color='#2980b9')
@@ -186,7 +189,7 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
     df = df.sort_values(by='design', ascending=False)
     labels = [design_label(d) for d in df['design']]
 
-    fig, axes = plt.subplots(3, 3, figsize=(16, 14), sharey=True)
+    fig, axes = plt.subplots(3, 3, figsize=(16, 16), sharey=True)
     axes = axes.flatten()
 
     for ax, (col, title, lower_better) in zip(axes, metrics):
@@ -334,8 +337,9 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
                      out_path: str):
     # Normalise design names: strip 'author_' prefix
     df_plddt = df_plddt.copy()
-    df_plddt['design'] = df_plddt['description'].str.replace('^author_', '',
+    df_plddt['design'] = df_plddt['description'].str.replace('pT', 'pt',
                                                               regex=True)
+    df_plddt['design'] = df_plddt['design'].str.removesuffix('_af2pred')
 
     # Merge
     df = df_plddt.merge(
@@ -346,7 +350,7 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
     df = df.sort_values(by='design', ascending=False)
     labels = [design_label(d) for d in df['design']]
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 5), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(12, 12), sharey=True)
 
     # AF2 monomer pLDDT
     ax = axes[0]
@@ -356,6 +360,7 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
     ax.set_title('AF2 monomer pLDDT\n(best model)', fontsize=11)
     ax.axvline(90, color='black', lw=1, ls='--', alpha=0.5, label='pLDDT=90')
     ax.legend(fontsize=8)
+    print(df)
     for bar, val in zip(bars, df['monomer_plddt']):
         if not np.isnan(val):
             ax.text(val + 0.1, bar.get_y() + bar.get_height() / 2,
