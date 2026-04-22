@@ -24,7 +24,7 @@ The following is cloned from github:
 - Inspired by BindCraft, add a structure relaxation and energy minization step
     - Calculate interface energy, buried surface area, hydrogen bonds, packing (shape complementarity), per-residue energy
 - **TO DO** ProteinMPNN alanine scan —> ESM-IF and VenusREM, full mutation scanning —> verify if the minibinders are interacting with the target in expected ways
-- **TO DO** Reduce percentage of amino acids in loops
+- **TO DO** Experiment percentage of amino acids in loops, given that the current designs have very low percentage of those
 - Use AF3 as a final step to validate the binding interaction. Notice in first round, discrepancy between AF3 and AF2 initial guess produced interface
     - If there are discrepancies, perhaps use docking (haddock or proclust) —> diff-dock/boltz 2 may be better for high-throughput screens, Rosetta is better for polar interactions
 - Generate authors' designs structures and see where my designs fit in the distribution (**TO DO**: will be getting author's full sequence designs and predicted structures soon). See more details in post_filter/inputs/author_design_stats/README.md
