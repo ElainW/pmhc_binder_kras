@@ -28,6 +28,11 @@ Usage:
     python fastrelax_designs_af3.py \
         --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/ \
+       --n_repeats   3
+
+    python fastrelax_designs_af3.py \
+        --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
+        --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/ \
         --n_repeats   3
 
     # Run on a specific list of designs:
