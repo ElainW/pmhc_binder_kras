@@ -4,7 +4,7 @@ Usage:
 module load conda/miniforge3/24.11.3-0
 conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
 
-python generate_af3_jobs.py \
+python generate_af3_jobs_nomsa.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
     --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
@@ -12,17 +12,18 @@ python generate_af3_jobs.py \
     --peptide_chain C \
     --skip ctnnb1-15 gp100-3 hiv-9 hiv-10 mage-4 mage-282 mage-513 mart1-3 mart1-43 pap-116 phox2b-5 phox2b-11 sars-6 wt1-5 wt1-8 yfv-2
 
-python generate_af3_jobs.py \
+python generate_af3_jobs_nomsa.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC_full.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
-    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
+    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3_nomsa \
+    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_nomsa/ \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
-    --peptide_chain C
+    --peptide_chain C \
+    --skip ctnnb1-15 mart1-3 mart1-43 pap-116 phox2b-5
 
-python generate_af3_jobs.py \
+python generate_af3_jobs_nomsa.py \
     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/af3 \
-    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
+    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/af3_nomsa \
+    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
     --peptide_chain C \
     --skip orient_88_pt20__32_sample08 orient_255_pt12__2_sample08 orient_255_pt12__27_sample04 orient_255_pt12__33_sample07 orient_255_pt12__2_sample01 orient_255_pt12__9_sample08 orient_255_pt12__33_sample03 orient_255_pt12__66_sample08 orient_255_pt12__2_sample03 orient_255_pt12__11_sample07 orient_255_pt12__33_sample04 orient_255_pt12__70_sample02 orient_255_pt12__2_sample06 orient_255_pt12__27_sample02 orient_255_pt12__33_sample05 orient_255_pt12__2_sample07 orient_255_pt12__27_sample03 orient_255_pt12__33_sample06
