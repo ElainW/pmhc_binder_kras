@@ -257,6 +257,12 @@ def main():
         run_cmd_small_output(cmd2)
         print(f"AF3 inference job submitted for {name}  (depends on {job_id})")
 
+#         cmd2 = (
+#             f"bash "
+#             f"AF3_part2.sh {name} {out_pred}"
+#         )
+#         run_cmd_small_output(cmd2)
+
 
 if __name__ == "__main__":
     main()
