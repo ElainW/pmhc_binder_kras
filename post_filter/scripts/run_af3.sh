@@ -21,7 +21,7 @@ python af3_design_stats.py \
     --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
     --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/relaxed_pdbs/ \
     --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/ \
-    --targets_csv     /path/to/design_targets.csv
+    --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv
 
 # step 2: visualize stats
 python plot_design_stats.py \
