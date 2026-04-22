@@ -1,6 +1,8 @@
 import os
 import sys
 import argparse
+from collections import defaultdict
+import re
 
 
 def _parse_header(header: str) -> tuple[str, str]:
@@ -31,7 +33,7 @@ def parse_fasta(fasta_path: str) -> dict[str, dict[str, str]]:
     def _flush():
         if current_header is None:
             return
-        name_raw, chain = _parse_header(current_header)
+        name, chain = _parse_header(current_header)
         designs[name][chain] = "".join(current_seq_lines)
 
     with open(fasta_path) as f:
@@ -85,7 +87,7 @@ def main():
                         default='C',
                         help='Chain ID of the peptide (default: C). '
                              'Take the peptide sequence from this chain')
-    parser.add_argument('--epitope_resum',         type=int,
+    parser.add_argument('--epitope_resnum',         type=int,
                         default='5',
                         help='The 1-based index of the residue of interest for each design')
     parser.add_argument('--epitope_notes',         type=str,
@@ -110,20 +112,21 @@ def main():
         f_out.write(','.join(['design','hla','peptide','peptide_len',
                               'target_name','cms_hotspot_positions',
                               'cms_hotspot_notes\n']))
-        for name, chains in sorted(designs.items()):
-            if chains == args.peptide_chain:
-                f_out.write(",".join(
-                    [
-                        name,
-                        args.hla,
-                        designs[name][chains],
-                        str(len(designs[name][chains])),
-                        args.target_name,
-                        str(args.epitope_resum),
-                        args.epitope_notes
-                    ]
-                )
-                           )
+        for name in designs:
+            for chain in designs[name]:
+                if chain == args.peptide_chain:
+                    f_out.write(",".join(
+                        [
+                            name,
+                            args.hla,
+                            designs[name][chain],
+                            str(len(designs[name][chain])),
+                            args.target_name,
+                            str(args.epitope_resnum),
+                            args.epitope_notes + '\n'
+                        ]
+                    )
+                               )
 
 
 
