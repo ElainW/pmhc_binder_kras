@@ -35,6 +35,10 @@ import matplotlib.patches as mpatches
 from matplotlib.colors import Normalize
 from matplotlib.cm import ScalarMappable
 
+# Designs with known anomalous metrics
+FLAGGED = {}
+FLAG_MARKER = '*'
+
 
 # Charge formula: R + K + 0.1*H - D - E
 def net_charge(seq: str) -> float:
@@ -425,9 +429,6 @@ def main():
     df_epi   = pd.read_csv(args.epitopes_csv)
     df_seq   = pd.read_csv(args.sequences,     sep=",")
     df_plddt = pd.read_csv(args.plddt_tsv,     sep='\t')
-
-    # Normalise xlsx binder name column
-    df_xlsx = df_xlsx.rename(columns={'Binder name': 'Binder name'})
 
     print(f'Loaded: {len(df_stats)} designs in stats TSV, '
           f'{len(df_fr)} in FastRelax TSV\n')
