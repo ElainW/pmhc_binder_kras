@@ -26,7 +26,7 @@ python generate_af3_jobs_nomsa.py \
     --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
     --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
     --peptide_chain C \
-    --skip orient_88_pt20__32_sample08 orient_255_pt12__2_sample08 orient_255_pt12__27_sample04 orient_255_pt12__33_sample07 orient_255_pt12__2_sample01 orient_255_pt12__9_sample08 orient_255_pt12__33_sample03 orient_255_pt12__66_sample08 orient_255_pt12__2_sample03 orient_255_pt12__11_sample07 orient_255_pt12__33_sample04 orient_255_pt12__70_sample02 orient_255_pt12__2_sample06 orient_255_pt12__27_sample02 orient_255_pt12__33_sample05 orient_255_pt12__2_sample07 orient_255_pt12__27_sample03 orient_255_pt12__33_sample06
+    --skip orient_158_pt12__64_sample01 orient_158_pt12__76_sample04 orient_158_pt12__76_sample07 orient_252_pt20__31_sample01 orient_252_pt20__31_sample04 orient_252_pt20__31_sample06 orient_255_pt12__0_sample02 orient_255_pt12__11_sample07 orient_255_pt12__14_sample06 orient_255_pt12__15_sample01 orient_255_pt12__17_sample03 orient_255_pt12__18_sample01 orient_255_pt12__21_sample01 orient_255_pt12__21_sample07 orient_255_pt12__27_sample02 orient_255_pt12__27_sample03 orient_255_pt12__27_sample04
 
 Generate AlphaFold3 JSON input files from a multi-chain FASTA file.
 Each unique design becomes one JSON file. Chain layout is flexible:
