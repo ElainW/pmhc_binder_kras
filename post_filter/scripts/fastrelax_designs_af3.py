@@ -182,7 +182,7 @@ def compute_interface_scores(pose: Pose, interface: str) -> dict:
     iam.set_compute_packstat(True)
     iam.set_compute_interface_sc(True)
     iam.set_pack_input(False)
-    iam.set_pack_separated(False)
+    iam.set_pack_separated(True)
     iam.apply(pose)
 
     scores = {}
