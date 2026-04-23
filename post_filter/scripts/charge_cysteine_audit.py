@@ -9,8 +9,9 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 - net_charge uses physiological formula: R + K + 0.1*H - D - E
 - Cysteine: ANY Cys in the binder fails — no exceptions for disulfides or
   interface positions. Cys residue numbers are reported for MPNN redesign.
-- Charge-failing designs: output interface residues (within 4Å of pMHC)
-  as fixed positions that should NOT be redesigned in ProteinMPNN
+- Charge-failing designs: output interface residues (Cβ/Cα within 4.5Å of pMHC Cβ/Cα)
+  as fixed positions that should NOT be redesigned in ProteinMPNN.
+  This matches BindCraft's mpnn_fix_interface definition.
 - Fails loudly if split PDBs are missing (no fallback)
 
 Usage:
@@ -27,7 +28,7 @@ import pandas as pd
 from Bio.PDB import PDBParser
 
 DELTA_PAE_CUTOFF   = -0.5
-INTERFACE_DIST     = 4.0   # Å — for charge interface residue detection
+INTERFACE_DIST     = 8   # Å Cβ/Cα to pMHC Cβ/Cα — matches BindCraft mpnn_fix_interface
 CHARGE_THRESH      = -2.0
 PEPTIDE_LEN        = 9
 
@@ -112,23 +113,48 @@ def find_cysteine_resnums(binder_residues: list,
 
 # ── Interface residue detection ───────────────────────────────────────────────
 
+def _cb_or_ca(res) -> np.ndarray | None:
+    """Return Cβ coordinate (or Cα for Gly/missing Cβ), or None if unavailable."""
+    if 'CB' in res:
+        return res['CB'].get_vector().get_array()
+    if 'CA' in res:
+        return res['CA'].get_vector().get_array()
+    return None
+
+
+def get_pmhc_cb_coords(pmhc_residues: list) -> np.ndarray:
+    """Extract Cβ/Cα coordinates from pMHC residues (mirrors BindCraft side)."""
+    coords = []
+    for res in pmhc_residues:
+        if res.id[0] != ' ':
+            continue
+        c = _cb_or_ca(res)
+        if c is not None:
+            coords.append(c)
+    return np.array(coords) if coords else np.empty((0, 3))
+
+
 def get_interface_residues(binder_residues: list,
-                           pmhc_coords: np.ndarray,
+                           pmhc_cb_coords: np.ndarray,
                            dist_cutoff: float = INTERFACE_DIST) -> list[int]:
-    """Return binder residue numbers (1-indexed) within dist_cutoff of any pMHC heavy atom."""
-    if len(pmhc_coords) == 0:
+    """
+    Return binder residue numbers whose Cβ (Cα for Gly) is within dist_cutoff
+    of any pMHC Cβ (Cα for Gly).
+
+    Matches BindCraft's mpnn_fix_interface definition: ColabDesign MPNN wrapper
+    uses Cβ-neighbour search at 4.5 Å to determine which binder positions to fix.
+    """
+    if len(pmhc_cb_coords) == 0:
         return []
     interface = []
     for res in binder_residues:
         if res.id[0] != ' ':
             continue
-        for atom in res:
-            if atom.element == 'H':
-                continue
-            coord = atom.get_vector().get_array()
-            if np.linalg.norm(pmhc_coords - coord, axis=1).min() <= dist_cutoff:
-                interface.append(res.id[1])
-                break
+        coord = _cb_or_ca(res)
+        if coord is None:
+            continue
+        if np.linalg.norm(pmhc_cb_coords - coord, axis=1).min() <= dist_cutoff:
+            interface.append(res.id[1])
     return sorted(set(interface))
 
 
@@ -179,7 +205,8 @@ def main():
             n_missing += 1
             continue
 
-        pmhc_coords = get_heavy_atom_coords(pmhc_res)
+        pmhc_coords    = get_heavy_atom_coords(pmhc_res)   # for Cys proximity
+        pmhc_cb_coords = get_pmhc_cb_coords(pmhc_res)       # for interface (BindCraft-style)
 
         # ── Sequence and basic metrics ────────────────────────────────────
         seq    = get_binder_seq(binder_res)
@@ -192,11 +219,12 @@ def main():
         )
 
         # ── Interface residues for charge-failing designs ─────────────────
+        # Cβ/Cα within 4.5 Å of pMHC Cβ/Cα — matches BindCraft mpnn_fix_interface
         flag_charge             = charge > CHARGE_THRESH
         interface_fixed_resnums = []
         if flag_charge:
             interface_fixed_resnums = get_interface_residues(
-                binder_res, pmhc_coords, dist_cutoff=INTERFACE_DIST
+                binder_res, pmhc_cb_coords, dist_cutoff=INTERFACE_DIST
             )
 
         flag_cys = n_cys > 0
