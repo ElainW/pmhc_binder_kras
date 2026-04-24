@@ -5,13 +5,13 @@ Runs Rosetta FastRelax on AF3 top-ranked model CIF files for a set of designs,
 then computes the full InterfaceAnalyzer score suite.
 
 AF3 output convention:
-  {af3_out_dir}/{design}_{timestamp}/{design}_model.cif   ← top-ranked model
+  {af3_out_dir}/{design}_{timestamp}/{design}_model.cif   <- top-ranked model
 
 Chain convention (matching your AF3 JSON input):
   A = binder
   B = MHC alpha
   C = peptide
-  D = B2M (if present - 4-chain complex)
+  D = B2M (if present -- 4-chain complex)
 
 Interface analysis is run on A_BC (binder vs MHC+peptide) for 3-chain inputs,
 or A_BCD (binder vs full pMHC+B2M) for 4-chain inputs. Chain layout is
@@ -35,27 +35,33 @@ Additional BuriedUnsatHbonds score (BindCraft-equivalent):
                          ignore_surface_res="false"
                        Threshold in BindCraft default_filters: < 4 (models 1+2+avg)
 
+Additional surface hydrophobicity score (BindCraft-equivalent):
+  surface_hydrophobicity -- fraction of solvent-exposed binder residues that are
+                            hydrophobic (apolar + PHE/TRP/TYR), computed via
+                            PyRosetta LayerSelector on chain A subpose.
+                            Threshold in BindCraft default_filters: <= 0.35
+
 Usage:
-    python fastrelax_designs_af3.py \
+    python fastrelax_af3.py \
         --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/ \
         --dalphaball  /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
         --n_repeats   3
 
-    python fastrelax_designs_af3.py \
+    python fastrelax_af3.py \
         --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
         --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/ \
         --dalphaball  /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
         --n_repeats   3
 
     # Run on a specific list of designs:
-    python fastrelax_designs_af3.py \
+    python fastrelax_af3.py \
         --af3_out_dir ... \
         --out_dir     ... \
         --designs ctnnb1-15 gp100-3 mart1-3
 
     # Inspect chain layout of one CIF before running:
-    python fastrelax_designs_af3.py --af3_out_dir ... --out_dir ... --inspect ctnnb1-15
+    python fastrelax_af3.py --af3_out_dir ... --out_dir ... --inspect ctnnb1-15
 """
 
 from __future__ import annotations
@@ -74,6 +80,7 @@ from pyrosetta.rosetta.protocols.analysis import InterfaceAnalyzerMover
 from pyrosetta.rosetta.core.scoring import ScoreFunctionFactory
 from pyrosetta.rosetta.core.import_pose import FileType
 from pyrosetta.rosetta.protocols.rosetta_scripts import XmlObjects
+from pyrosetta.rosetta.core.select.residue_selector import ChainSelector, LayerSelector
 
 SKIP_COLS = {
     'side1_normalized', 'side1_score',
@@ -233,7 +240,115 @@ def compute_buns(pose: Pose) -> float | None:
         return None
 
 
-# -- Main ---------------------------------------------------------------------
+def compute_surface_hydrophobicity(pose: Pose, binder_chain: str = 'A') -> float | None:
+    """
+    Fraction of solvent-exposed binder residues that are hydrophobic.
+
+    Matches BindCraft's pyrosetta_utils.py score_interface() exactly:
+      - Extract binder chain subpose
+      - Apply LayerSelector (surface layer only: pick_core=False, pick_boundary=False)
+      - Count apolar residues + PHE/TRP/TYR as hydrophobic
+      - Return hydrophobic_count / total_surface_count
+
+    BindCraft threshold: <= 0.35 (Surface_Hydrophobicity filter).
+    """
+    try:
+        chain_sel     = ChainSelector(binder_chain)
+        chain_subset  = chain_sel.apply(pose)
+        chain_indices = pyrosetta.rosetta.core.select.get_residues_from_subset(chain_subset)
+
+        binder_pose = pyrosetta.rosetta.core.pose.Pose()
+        pyrosetta.rosetta.core.pose.pdbslice(binder_pose, pose, chain_indices)
+
+        layer_sel = LayerSelector()
+        layer_sel.set_layers(pick_core=False, pick_boundary=False, pick_surface=True)
+        surface_res = layer_sel.apply(binder_pose)
+
+        hydrophobic_count = 0
+        total_count       = 0
+
+        for i in range(1, binder_pose.total_residue() + 1):
+            if not surface_res[i]:
+                continue
+            res = binder_pose.residue(i)
+            if not res.is_protein():
+                continue
+            total_count += 1
+            if res.is_apolar() or res.name3() in {'PHE', 'TRP', 'TYR'}:
+                hydrophobic_count += 1
+
+        if total_count == 0:
+            return None
+        return round(hydrophobic_count / total_count, 4)
+
+    except Exception as e:
+        print(f"    WARNING: surface_hydrophobicity failed: {e}")
+        return None
+
+
+def compute_interface_aa_counts(pose: Pose, binder_chain: str = 'A',
+                                 aas: tuple = ('K', 'M'),
+                                 dist_cutoff: float = 8.0) -> dict:
+    """
+    Count occurrences of specific amino acids among binder interface residues.
+
+    Interface defined as binder Cβ/Cα within dist_cutoff of any pMHC Cβ/Cα
+    (same 8 Å definition as charge_cysteine_audit.py).
+
+    BindCraft default_filters thresholds: K <= 3, M <= 3 at interface.
+
+    Returns dict: {'interface_n_K': int, 'interface_n_M': int, ...}
+    """
+    THREE_TO_ONE = {
+        'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
+        'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
+        'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
+        'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
+    }
+
+    counts = {f'interface_n_{aa}': 0 for aa in aas}
+
+    try:
+        pmhc_cb = []
+        for i in range(1, pose.total_residue() + 1):
+            if pose.pdb_info().chain(i) == binder_chain:
+                continue
+            res = pose.residue(i)
+            if not res.is_protein():
+                continue
+            if res.has('CB'):
+                pmhc_cb.append(res.xyz('CB'))
+            elif res.has('CA'):
+                pmhc_cb.append(res.xyz('CA'))
+
+        if not pmhc_cb:
+            return counts
+
+        pmhc_arr = np.array([[v.x, v.y, v.z] for v in pmhc_cb])
+
+        for i in range(1, pose.total_residue() + 1):
+            if pose.pdb_info().chain(i) != binder_chain:
+                continue
+            res = pose.residue(i)
+            if not res.is_protein():
+                continue
+            if res.has('CB'):
+                xyz = res.xyz('CB')
+            elif res.has('CA'):
+                xyz = res.xyz('CA')
+            else:
+                continue
+            coord = np.array([xyz.x, xyz.y, xyz.z])
+            if np.linalg.norm(pmhc_arr - coord, axis=1).min() <= dist_cutoff:
+                one_letter = THREE_TO_ONE.get(res.name3())
+                if one_letter in aas:
+                    counts[f'interface_n_{one_letter}'] += 1
+
+    except Exception as e:
+        print(f"    WARNING: interface_aa_counts failed: {e}")
+
+    return counts
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -354,21 +469,33 @@ def main():
                 print(f"    buns_delta_unsat={buns:.1f}  "
                       f"({'PASS' if buns_pass else 'FAIL'} < {BUNS_THRESHOLD})")
 
+            surf_hydrophob = compute_surface_hydrophobicity(pose, binder_chain='A')
+            if surf_hydrophob is not None:
+                print(f"    surface_hydrophobicity={surf_hydrophob:.3f}  "
+                      f"({'PASS' if surf_hydrophob <= 0.35 else 'FAIL'} <= 0.35)")
+
+            # Interface AA counts for K and M -- BindCraft threshold <= 3 each
+            iface_aa = compute_interface_aa_counts(pose, binder_chain='A', aas=('K', 'M'))
+            print(f"    interface_n_K={iface_aa['interface_n_K']}  "
+                  f"interface_n_M={iface_aa['interface_n_M']}")
+
             confidences  = get_confidences(args.af3_out_dir, design)
             ranking_info = find_ranking_scores(args.af3_out_dir, design)
 
             record = {
-                'design':               design,
-                'cif_path':             cif_path,
-                'chains':               ','.join(chain_ids),
-                'interface':            interface,
-                'rosetta_score_before': round(score_before, 3),
-                'rosetta_score_after':  round(score_after,  3),
-                'rosetta_score_delta':  round(score_after - score_before, 3),
-                'relaxed_pdb':          relaxed_pdb,
-                'buns_delta_unsat':     buns,
-                'buns_pass':            buns_pass,
+                'design':                 design,
+                'cif_path':               cif_path,
+                'chains':                 ','.join(chain_ids),
+                'interface':              interface,
+                'rosetta_score_before':   round(score_before, 3),
+                'rosetta_score_after':    round(score_after,  3),
+                'rosetta_score_delta':    round(score_after - score_before, 3),
+                'relaxed_pdb':            relaxed_pdb,
+                'buns_delta_unsat':       buns,
+                'buns_pass':              buns_pass,
+                'surface_hydrophobicity': surf_hydrophob,
             }
+            record.update(iface_aa)
             record.update(confidences)   # af3_iptm, af3_ptm, af3_fraction_disordered
             record.update(ranking_info)  # top_seed, top_sample, af3_ranking_score
             record.update(iface_scores)  # all IAM metrics
@@ -389,6 +516,7 @@ def main():
         'dG_separated', 'dG_separated/dSASAx100', 'dSASA_int',
         'delta_unsatHbonds', 'hbonds_int', 'packstat',
         'sc_value', 'per_residue_energy_int', 'buns_delta_unsat',
+        'surface_hydrophobicity', 'interface_n_K', 'interface_n_M',
     ]
     anchor = 'dG_separated'
     valid  = out_df.dropna(subset=[anchor]) if anchor in out_df.columns else out_df
