@@ -174,7 +174,7 @@ def plot_secondary_structure(df_stats: pd.DataFrame, out_path: str):
 def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
     metrics = [
         ('dG_separated',          'dG_separated (REU)',           True),
-        ('dG_cross/dSASAx100',    'dG_cross/dSASA×100',           True),
+        ('dG_separated/dSASAx100',    'dG_separated/dSASA×100',           True),
         ('dSASA_int',             'dSASA_int (Å²)',                False),
         ('dSASA_polar',           'dSASA_polar (Å²)',              False),
         ('hbonds_int',            'H-bonds at interface',          False),

@@ -171,7 +171,7 @@ def plot_secondary_structure(df_stats: pd.DataFrame, out_path: str):
 def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
     metrics = [
         ('dG_separated',          'dG_separated (REU)',           True),
-        ('dG_cross/dSASAx100',    'dG_cross/dSASA×100',           True),
+        ('dG_separated/dSASAx100',    'dG_separated/dSASA×100',           True),
         ('dSASA_int',             'dSASA_int (Å²)',                False),
         ('dSASA_polar',           'dSASA_polar (Å²)',              False),
         ('hbonds_int',            'H-bonds at interface',          False),
@@ -181,7 +181,7 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
         ('per_residue_energy_int','Per-residue interface energy',  True),
     ]
 
-    # Sort designs consistently by dG_separated
+    # Sort designs consistently by design names
     df = df_fr.dropna(subset=['dG_separated']).copy()
     df = df.sort_values(by='design', ascending=False)
     labels = [design_label(d) for d in df['design']]
