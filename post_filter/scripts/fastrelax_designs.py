@@ -38,7 +38,7 @@ Usage:
         --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
         --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
         --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/ \
-        --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
+        --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
         --n_repeats 3
 """
 
