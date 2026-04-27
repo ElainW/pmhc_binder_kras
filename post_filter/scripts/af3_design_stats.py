@@ -43,7 +43,8 @@ Usage:
         --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
         --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \
         --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/ \
-        --targets_csv     /path/to/design_targets.csv
+        --targets_csv     /path/to/design_targets.csv \
+        --fastrelax_tsv   /path/to/fastrelax.tsv
 
     # Specific designs:
     python af3_design_stats.py ... --designs ctnnb1-15 gp100-3 mart1-3
@@ -60,6 +61,7 @@ import glob
 import json
 import tempfile
 import argparse
+import math
 
 import numpy as np
 import pandas as pd
@@ -99,6 +101,18 @@ SS_MAP = {
 }
 
 DEFAULT_PEPTIDE_LEN = 9
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BindCraft filter thresholds
+# Source: Pacesa et al. 2024 (Nature) / default_filters.json
+# ─────────────────────────────────────────────────────────────────────────────
+
+BINDCRAFT_THRESHOLDS = {
+    'buns_delta_unsat':       4,     # buried unsat H-bonds < 4
+    'surface_hydrophobicity': 0.35,  # fraction exposed hydrophobic <= 0.35
+    'interface_K':            3,     # Lys at interface <= 3
+    'interface_M':            3,     # Met at interface <= 3
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,6 +164,23 @@ def find_designs(af3_out_dir: str) -> list[str]:
     )
 
 
+def find_model_cif(af3_out_dir: str, design: str) -> str | None:
+    design_dir = os.path.join(af3_out_dir, design)
+    top = os.path.join(design_dir, f'{design}_model.cif')
+    if os.path.exists(top):
+        return top
+    ranking = os.path.join(design_dir, 'ranking_scores.csv')
+    if os.path.exists(ranking):
+        df  = pd.read_csv(ranking)
+        row = df.sort_values('ranking_score', ascending=False).iloc[0]
+        p   = os.path.join(design_dir,
+                           f'seed-{int(row["seed"])}_sample-{int(row["sample"])}',
+                           'model.cif')
+        if os.path.exists(p):
+            return p
+    return None
+
+
 def find_top_seed_confidences(af3_out_dir: str) -> str | None:
     ranking = os.path.join(af3_out_dir, 'ranking_scores.csv')
     if not os.path.exists(ranking):
@@ -178,7 +209,7 @@ def get_top_level_confidences(af3_out_dir: str, design: str) -> dict:
         return {}
 
 
-def get_top_ranking_score(af3_out_dir: str, design: str) -> dict:
+def get_top_ranking_score(af3_out_dir: str) -> dict:
     path = os.path.join(af3_out_dir, 'ranking_scores.csv')
     if not os.path.exists(path):
         return {}
@@ -236,26 +267,6 @@ def get_peptide_pose_indices(pose: Pose, pep_chain: str, pep_len: int) -> list[i
 def build_interface_string(chain_ids: list[str]) -> str:
     others = [c for c in chain_ids if c != 'A']
     return f"A_{''.join(others)}"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FastRelax
-# ─────────────────────────────────────────────────────────────────────────────
-
-def make_scorefxn(with_cst: bool = False):
-    sfxn = ScoreFunctionFactory.create_score_function('ref2015')
-    if with_cst:
-        sfxn.set_weight(
-            pyrosetta.rosetta.core.scoring.ScoreType.coordinate_constraint, 1.0
-        )
-    return sfxn
-
-
-def run_fastrelax(pose: Pose, scorefxn, n_repeats: int = 3) -> Pose:
-    fr = FastRelax(scorefxn_in=scorefxn, standard_repeats=n_repeats)
-    fr.constrain_relax_to_start_coords(True)
-    fr.apply(pose)
-    return pose
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -594,6 +605,38 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'hydro': hydro_rows, 'hbond': hbond_rows}
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BindCraft metrics
+# ─────────────────────────────────────────────────────────────────────────────
+
+def apply_bindcraft_filters(record: dict) -> dict:
+    """
+    Add pass/fail booleans for each BindCraft threshold.
+    Adds: buns_pass, hydrophobicity_pass, interface_K_pass,
+          interface_M_pass, pass_all_bindcraft.
+    """
+    buns   = record.get('buns_delta_unsat', float('nan'))   # from fastrelax TSV merge
+    hydro  = record.get('surface_hydrophobicity', float('nan'))
+    iface_K = record.get('interface_n_K', float('nan'))
+    iface_M = record.get('interface_n_M', float('nan'))
+
+    def _pass(val, thresh, higher_is_better):
+        if val is None or (isinstance(val, float) and math.isnan(val)):
+            return None
+        return val <= thresh if not higher_is_better else val >= thresh
+
+    passes = {
+        'buns_pass':         _pass(buns,    BINDCRAFT_THRESHOLDS['buns_delta_unsat'],       False),
+        'hydrophobicity_pass': _pass(hydro, BINDCRAFT_THRESHOLDS['surface_hydrophobicity'], False),
+        'interface_K_pass':  _pass(iface_K, BINDCRAFT_THRESHOLDS['interface_K'],            False),
+        'interface_M_pass':  _pass(iface_M, BINDCRAFT_THRESHOLDS['interface_M'],            False),
+    }
+    record.update(passes)
+    defined = [v for v in passes.values() if v is not None]
+    record['pass_all_bindcraft'] = all(defined) if defined else None
+    return record
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-design orchestration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -621,18 +664,13 @@ def process_design(
         'peptide_len':       peptide_len,
         'hotspot_positions': ','.join(str(p) for p in hotspot_positions),
     }
-    af3_out_dir_full = "Empty"
-    # accommodate alternative af3_out_dir
-    for out_dir in glob.glob(f"{af3_out_dir}/{design}*"):
-        if os.path.join(out_dir, f"{design}_confidences.json"):
-            af3_out_dir_full = out_dir
 
     # AF3 summary metrics
-    record.update(get_top_level_confidences(af3_out_dir_full, design))
-    record.update(get_top_ranking_score(af3_out_dir_full, design))
+    record.update(get_top_level_confidences(af3_out_dir, design))
+    record.update(get_top_ranking_score(af3_out_dir, design))
 
     # ipSAE — PAE-based, coordinate-independent
-    conf_path = find_top_seed_confidences(af3_out_dir_full)
+    conf_path = find_top_seed_confidences(af3_out_dir, design)
     if conf_path:
         try:
             pae, tok = load_af3_pae(conf_path)
@@ -651,7 +689,7 @@ def process_design(
         except Exception as e:
             print(f"    WARNING: ipSAE failed: {e}")
     else:
-        print(f"    WARNING: top-seed confidences.json not found at {conf_path}")
+        print(f"    WARNING: top-seed confidences.json not found")
 
     # Load pre-relaxed PDB
     relaxed_pdb = os.path.join(relaxed_pdb_dir, f'{design}_relaxed.pdb')
@@ -742,6 +780,19 @@ def process_design(
     except Exception as e:
         print(f"    WARNING: contact_map failed: {e}")
 
+    # BindCraft metrics
+    try:
+        # buns_delta_unsat and delta_unsatHbonds are read from --fastrelax_tsv
+        record['surface_hydrophobicity'] = compute_surface_hydrophobicity(pose, binder_chain='A')
+        iface_aa = compute_interface_aa_counts(pose, binder_chain='A',
+                                               target_chains=''.join(c for c in chain_ids if c != 'A'))
+        record.update(iface_aa)
+        record = apply_bindcraft_filters(record)
+        print(f"    BindCraft: hydro={record['surface_hydrophobicity']:.3f}  "
+              f"K={record['interface_K']}  M={record['interface_M']}")
+    except Exception as e:
+        print(f"    WARNING: BindCraft metrics failed: {e}")
+
     return record, contact_rows
 
 
@@ -762,6 +813,9 @@ def main():
     parser.add_argument('--targets_csv',     required=True,
         help='CSV: design, peptide_len, cms_hotspot_positions')
     parser.add_argument('--designs',         nargs='*')
+    parser.add_argument('--fastrelax_tsv',   default=None,
+        help='fastrelax_af3_scores.tsv — merges buns_delta_unsat, '
+             'delta_unsatHbonds and all IAM scores into output TSV')
     parser.add_argument('--inspect',         metavar='DESIGN')
     args = parser.parse_args()
 
@@ -841,6 +895,18 @@ def main():
         hbond_ct_rows .extend(ct_rows['hbond'])
         print()
 
+    # Merge FastRelax TSV columns if provided
+    fr_cols_to_merge = [
+        'buns_delta_unsat', 'delta_unsatHbonds',
+        'surface_hydrophobicity', 'interface_n_K', 'interface_n_M', 'n_interface_res',
+        'dG_separated', 'dG_separated/dSASAx100',
+        'dSASA_int', 'dSASA_polar', 'dSASA_hphobic',
+        'hbonds_int', 'hbond_E_fraction', 'nres_int', 'nres_all',
+        'packstat', 'per_residue_energy_int', 'sc_value',
+        'complex_normalized', 'rosetta_score_before',
+        'rosetta_score_after', 'rosetta_score_delta',
+    ]
+
     # Save contact TSVs
     pd.DataFrame(all_ct_rows)  .to_csv(os.path.join(contacts_dir, 'all_contacts.tsv'),   sep='\t', index=False)
     pd.DataFrame(polar_ct_rows).to_csv(os.path.join(contacts_dir, 'polar_contacts.tsv'), sep='\t', index=False)
@@ -850,6 +916,36 @@ def main():
 
     # Save main TSV
     df = pd.DataFrame(records)
+
+    if args.fastrelax_tsv and os.path.exists(args.fastrelax_tsv):
+        df_fr = pd.read_csv(args.fastrelax_tsv, sep='\t')
+        # Keep only the columns we want and avoid duplicating existing ones
+        available = [c for c in fr_cols_to_merge
+                     if c in df_fr.columns and c not in df.columns]
+        if available:
+            df = df.merge(df_fr[['design'] + available], on='design', how='left')
+            print(f"Merged {len(available)} columns from {args.fastrelax_tsv}")
+        # Now apply_bindcraft_filters has buns_delta_unsat available
+        if 'buns_delta_unsat' in df.columns or 'delta_unsatHbonds' in df.columns:
+            src = 'buns_delta_unsat' if 'buns_delta_unsat' in df.columns else 'delta_unsatHbonds'
+            def _add_buns_pass(row):
+                val = row.get(src, float('nan'))
+                try:
+                    return int(val) < BINDCRAFT_THRESHOLDS['buns_delta_unsat']
+                except (TypeError, ValueError):
+                    return None
+            df['buns_pass'] = df.apply(_add_buns_pass, axis=1)
+            df['pass_all_bindcraft'] = df.apply(
+                lambda r: all(v is True for v in [
+                    r.get('buns_pass'),
+                    r.get('hydrophobicity_pass'),
+                    r.get('interface_K_pass'),
+                    r.get('interface_M_pass'),
+                ] if v is not None),
+                axis=1
+            )
+    elif args.fastrelax_tsv:
+        print(f"WARNING: --fastrelax_tsv not found: {args.fastrelax_tsv}")
 
     id_cols    = ['design', 'peptide_len', 'hotspot_positions',
                   'cif_path', 'chains', 'interface', 'relaxed_pdb']
@@ -881,11 +977,21 @@ def main():
          if re.match(r'^contacts_(all|polar|hydro|hbond)_p\d+$', c)],
         key=lambda x: (re.sub(r'_p\d+$', '', x), int(re.search(r'_p(\d+)$', x).group(1)))
     )
+    bindcraft_cols = [
+        'buns_pass',
+        'surface_hydrophobicity', 'hydrophobicity_pass',
+        'interface_K', 'interface_K_pass',
+        'interface_M', 'interface_M_pass',
+        'n_interface_res', 'pass_all_bindcraft',
+    ]
     ros_cols   = ['rosetta_score_before', 'rosetta_score_after',
                   'rosetta_score_delta']
 
+    fr_cols_present = [c for c in fr_cols_to_merge if c in df.columns
+                       and c not in ros_cols and c != 'design']
     ordered = (id_cols + af3_cols + ipsae_cols + dssp_cols
-               + cms_cols + ct_sum_cols + ct_hotspot_cols + ct_pos_cols + ros_cols)
+               + cms_cols + ct_sum_cols + ct_hotspot_cols + ct_pos_cols
+               + bindcraft_cols + fr_cols_present + ros_cols)
     present = [c for c in ordered if c in df.columns]
     extras  = [c for c in df.columns if c not in present]
     df      = df[present + extras]
@@ -900,7 +1006,9 @@ def main():
                 'cms_peptide_total', 'cms_hotspot_total',
                 'n_all_contacts', 'n_polar_contacts', 'n_hbonds',
                 'n_contacts_hotspot_total_all', 'n_contacts_hotspot_total_polar',
-                'n_contacts_hotspot_total_hbond']
+                'n_contacts_hotspot_total_hbond',
+                'buns_delta_unsat', 'delta_unsatHbonds', 'surface_hydrophobicity',
+                'interface_K', 'interface_M', 'pass_all_bindcraft']
     anchor = 'ipsae_binder_peptide'
     valid  = df.dropna(subset=[anchor]) if anchor in df.columns else df
     print(f"-- Summary ({len(valid)} designs with ipSAE) --")
