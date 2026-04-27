@@ -242,6 +242,11 @@ def main():
         out_json    = args.output_json_dir
         max_tmpl    = args.max_template_date
 
+        # skip finished samples
+        if os.path.isfile(f"{out_pred}/{name}/{name}_data.json"):
+            print(f"{name} has been run. Skipping...")
+            continue
+
         # Part 1: MSA + template search (CPU only, --norun_inference)
         cmd1 = (
             f"sbatch "
