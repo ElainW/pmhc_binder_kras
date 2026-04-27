@@ -18,6 +18,7 @@ Usage:
     python charge_cysteine_audit.py \
         --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
         --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
+        --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
         --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 """
 
