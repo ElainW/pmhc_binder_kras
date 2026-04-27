@@ -197,7 +197,7 @@ def compute_interface_scores(pose: Pose, interface: str) -> dict:
     iam.apply(pose)
 
     scores = {}
-    for key, val in pose.scores.items():
+    for key, val in pose.cache.items():
         if key in SKIP_COLS:
             continue
         try:
@@ -209,20 +209,38 @@ def compute_interface_scores(pose: Pose, interface: str) -> dict:
 
 def compute_buns(pose: Pose) -> float | None:
     """
-    Compute delta buried unsatisfied H-bonds using BuriedUnsatHbonds filter,
-    matching BindCraft's pyrosetta_utils.py score_interface() exactly:
+    Compute delta buried unsatisfied H-bonds using BuriedUnsatHbonds filter.
 
-      report_all_heavy_atom_unsats="true"  -- count all heavy atom unsats
-      use_ddG_style="true"                 -- delta (complex minus apo partners)
-      dalphaball_sasa="1"                  -- DAlphaBall SASA (requires binary)
-      probe_radius="1.1"
-      burial_cutoff_apo="0.2"
-      ignore_surface_res="false"           -- count surface unsats too
+    use_ddG_style requires <= 3 chains (Rosetta limitation). For 4-chain poses
+    (binder + MHC + peptide + B2M), chain D (B2M) is stripped before the filter
+    is applied so the calculation runs on the 3-chain binder/MHC/peptide subpose.
+    The stripped pose is a local copy — the original is not modified.
 
     Returns float count, or None on failure.
     BindCraft default filter threshold: < 4 (reject if >= 4).
     """
     try:
+        if pose.num_chains() >= 4:
+            # Extract chains A, B, C only — drop chain D (B2M).
+            # use_ddG_style requires <= 3 chains (Rosetta limitation).
+            chain_ids = []
+            seen = set()
+            for i in range(1, pose.total_residue() + 1):
+                ch = pose.pdb_info().chain(i)
+                if ch not in seen:
+                    seen.add(ch)
+                    chain_ids.append(ch)
+            keep_chains = chain_ids[:3]
+            selector = pyrosetta.rosetta.core.select.residue_selector.ChainSelector(
+                ','.join(keep_chains)
+            )
+            subset    = selector.apply(pose)
+            indices   = pyrosetta.rosetta.core.select.get_residues_from_subset(subset)
+            buns_pose = Pose()
+            pyrosetta.rosetta.core.pose.pdbslice(buns_pose, pose, indices)
+        else:
+            buns_pose = pose
+
         buns_filter = XmlObjects.static_get_filter(
             '<BuriedUnsatHbonds '
             'report_all_heavy_atom_unsats="true" '
@@ -234,7 +252,7 @@ def compute_buns(pose: Pose) -> float | None:
             'burial_cutoff_apo="0.2" '
             'confidence="0" />'
         )
-        return float(buns_filter.report_sm(pose))
+        return float(buns_filter.report_sm(buns_pose))
     except Exception as e:
         print(f"    WARNING: BuriedUnsatHbonds failed: {e}")
         return None
@@ -385,7 +403,8 @@ def main():
         f'-ignore_unrecognized_res true '
         f'-ignore_zero_occupancy false '
         f'-load_PDB_components false '
-        f'-holes:dalphaball {args.dalphaball}',
+        f'-holes:dalphaball {args.dalphaball} '
+        f'-detect_disulf false',
         silent=True,
     )
 
