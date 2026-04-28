@@ -7,8 +7,9 @@ Output files:
   01_charge_cysteine.png   — net charge bar + cysteine count scatter
   02_secondary_structure.png — stacked bar of helix/sheet/loop %
   03_fastrelax.png         — 9-panel strip plots for FastRelax metrics
-  04_cms_heatmap.png       — 18×10 heatmap of CMS per peptide position
-  05_plddt_ipsae.png       — AF2 monomer pLDDT and ipSAE binder-peptide
+  04_bindcraft.png         - 4-panel strip plots for BindCraft metrics
+  05_cms_heatmap.png       — 18×10 heatmap of CMS per peptide position
+  06_plddt_ipsae.png       — AF2 monomer pLDDT and ipSAE binder-peptide
 
 prame-9 and sars-6 flagged with asterisk (*) in plots where their
 metrics are known to be anomalous (ipSAE, and noted in secondary structure).
@@ -16,7 +17,6 @@ metrics are known to be anomalous (ipSAE, and noted in secondary structure).
 Usage:
     python plot_author_stats.py \
         --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_design_stats.tsv \
-        --fastrelax_tsv /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/fastrelax_af3_scores.tsv \
         --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
         --xlsx         /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
         --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
@@ -39,6 +39,13 @@ from matplotlib.cm import ScalarMappable
 # Designs with known anomalous metrics
 FLAGGED = {'prame-9', 'sars-6'}
 FLAG_MARKER = '*'
+
+BINDCRAFT_THRESHOLDS = {
+    'buns_delta_unsat':       4,     # buried unsat H-bonds < 4
+    'surface_hydrophobicity': 0.35,  # fraction exposed hydrophobic <= 0.35
+    'interface_n_K':            3,     # Lys at interface <= 3
+    'interface_n_M':            3,     # Met at interface <= 3
+}
 
 # Charge formula: R + K + 0.1*H - D - E
 def net_charge(seq: str) -> float:
@@ -201,7 +208,10 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
                 ax.set_visible(False)
                 continue
         col = actual_col
-        vals = df[col].values
+        if col == 'hbonds_int' or col == 'delta_unsatHbonds':
+            vals = df[col]/df['nres_int'].values
+        else:
+            vals = df[col].values
         # Color: green = better, red = worse
         if lower_better:
             norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
@@ -235,7 +245,73 @@ def plot_fastrelax(df_fr: pd.DataFrame, out_path: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Plot 04: CMS heatmap
+# Plot 04: BindCraft
+# ─────────────────────────────────────────────────────────────────────────────
+def plot_bindcraft(df_stats: pd.DataFrame, out_path: str):
+    metrics = [
+        ('buns_delta_unsat',          'buried unsat H-bonds in complex',           True),
+        ('surface_hydrophobicity',    'fraction exposed hydrophobic',           True),
+        ('interface_n_K',             'Lys at interface',                True),
+        ('interface_n_M',             'Met at interface',              True),
+    ]
+
+    # Sort designs consistently by design names
+    df = df_stats.sort_values(by='design', ascending=False)
+    labels = [design_label(d) for d in df['design']]
+
+    fig, axes = plt.subplots(2, 2, figsize=(10, 10), sharey=True)
+    axes = axes.flatten()
+
+    for ax, (col, title, lower_better) in zip(axes, metrics):
+        actual_col = col
+        if col not in df.columns:
+            variants = [c for c in df.columns
+                        if c.replace('/','').replace('x','X') ==
+                           col.replace('/','').replace('x','X')]
+            if variants:
+                actual_col = variants[0]
+            else:
+                ax.set_visible(False)
+                continue
+        col = actual_col
+        if col == 'buns_delta_unsat':
+            vals = df[col]/df['nres_all'].values
+        else:
+            vals = df[col].values
+        vals = df[col].values
+        # Color: green = better, red = worse
+        if lower_better:
+            norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
+            colors = plt.cm.RdYlGn_r(norm_vals)
+        else:
+            norm_vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
+            colors = plt.cm.RdYlGn(norm_vals)
+
+        bars = ax.barh(labels, vals, color=colors, edgecolor='white')
+        vrange2 = vals.max() - vals.min()
+        for bar, val in zip(bars, vals):
+            ax.text(val + vrange2 * 0.01, bar.get_y() + bar.get_height() / 2,
+                    f'{val:.2f}', va='center', fontsize=6)
+        ax.set_title(title, fontsize=10)
+        ax.tick_params(axis='y', labelsize=7)
+        ax.axvline(BINDCRAFT_THRESHOLDS[col], color='black', lw=1, ls='--',
+                   alpha=0.6, label=f'BindCraft thresh={BINDCRAFT_THRESHOLDS[col]}')
+        ax.legend(fontsize=7, loc='lower right')
+
+    if FLAGGED:
+        fig.text(0.5, -0.01,
+                 f'* flagged designs: {", ".join(sorted(FLAGGED))} '
+                 f'(prame-9 includes B2M; sars-6 includes B2M)',
+                 ha='center', fontsize=8, color='grey')
+
+    fig.suptitle('BindCraft metrics (AF3 structures)', fontsize=13, y=1.01)
+    plt.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'Saved -> {out_path}')
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Plot 05: CMS heatmap
 # ─────────────────────────────────────────────────────────────────────────────
 
 def plot_cms_heatmap(df_stats: pd.DataFrame, df_epi: pd.DataFrame,
@@ -327,7 +403,7 @@ def plot_cms_heatmap(df_stats: pd.DataFrame, df_epi: pd.DataFrame,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Plot 05: pLDDT + ipSAE
+# Plot 06: pLDDT + ipSAE
 # ─────────────────────────────────────────────────────────────────────────────
 
 def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
@@ -410,8 +486,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--stats_tsv',      required=True,
         help='af3_design_stats.tsv')
-    parser.add_argument('--fastrelax_tsv',  required=True,
-        help='fastrelax_af3_scores.tsv')
     parser.add_argument('--epitopes_csv',   required=True,
         help='design_epitopes.csv')
     parser.add_argument('--xlsx',           required=True,
@@ -425,16 +499,12 @@ def main():
 
     # Load data
     df_stats = pd.read_csv(args.stats_tsv,     sep='\t')
-    df_fr    = pd.read_csv(args.fastrelax_tsv, sep='\t')
     df_epi   = pd.read_csv(args.epitopes_csv)
     df_xlsx  = pd.read_csv(args.xlsx,          sep=",")
     df_plddt = pd.read_csv(args.plddt_tsv, sep='\t')
 
     # Normalise xlsx binder name column
     df_xlsx = df_xlsx.rename(columns={'Binder name': 'Binder name'})
-
-    print(f'Loaded: {len(df_stats)} designs in stats TSV, '
-          f'{len(df_fr)} in FastRelax TSV\n')
 
     plot_charge_cysteine(
         df_epi, df_xlsx,
@@ -445,16 +515,20 @@ def main():
         os.path.join(args.out_dir, '02_secondary_structure.png')
     )
     plot_fastrelax(
-        df_fr,
+        df_stats,
         os.path.join(args.out_dir, '03_fastrelax.png')
+    )
+    plot_bindcraft(
+        df_stats,
+        os.path.join(args.out_dir, '04_bindcraft.png')
     )
     plot_cms_heatmap(
         df_stats, df_epi,
-        os.path.join(args.out_dir, '04_cms_heatmap.png')
+        os.path.join(args.out_dir, '05_cms_heatmap.png')
     )
     plot_plddt_ipsae(
         df_plddt, df_stats,
-        os.path.join(args.out_dir, '05_plddt_ipsae.png')
+        os.path.join(args.out_dir, '06_plddt_ipsae.png')
     )
 
     print('\nAll done.')
