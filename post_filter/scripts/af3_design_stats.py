@@ -77,6 +77,7 @@ from pyrosetta.rosetta.core.select.residue_selector import (
 )
 from pyrosetta.rosetta.protocols.simple_filters import ContactMolecularSurfaceFilter
 from pyrosetta.rosetta.protocols.moves import DsspMover
+from Bio.PDB import PDBParser as _PDBParser
 
 # contact_map.py must be on the path (same directory or PYTHONPATH)
 from contact_map import (
@@ -88,6 +89,15 @@ from contact_map import (
     PEPTIDE_LEN as CM_PEPTIDE_LEN,
 )
 
+# charge_cysteine_audit.py must be on the path (same directory or PYTHONPATH)
+from charge_cysteine_audit import (
+    find_cysteine_resnums,
+    get_interface_residues,
+    get_pmhc_cb_coords,
+    get_heavy_atom_coords,
+    net_charge,
+    get_binder_seq,
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -113,6 +123,10 @@ BINDCRAFT_THRESHOLDS = {
     'interface_K':            3,     # Lys at interface <= 3
     'interface_M':            3,     # Met at interface <= 3
 }
+
+# Cb/Ca distance cutoff for interface residue detection (ProteinMPNN fixed positions)
+INTERFACE_DIST_CB = 4.5   # Å  Cb-Cb (or Ca for Gly)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -637,6 +651,90 @@ def apply_bindcraft_filters(record: dict) -> dict:
     record['pass_all_bindcraft'] = all(defined) if defined else None
     return record
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Charge / Cys / interface redesign metrics
+# (imports from charge_cysteine_audit.py; Cb-distance interface definition)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def compute_redesign_metrics(
+    relaxed_pdb: str,
+    design: str,
+    binder_chain:  str = 'A',
+    mhc_chain:     str = 'B',
+    peptide_chain: str = 'C',
+) -> dict:
+    """
+    Compute charge, Cys, and interface fixed positions for ProteinMPNN redesign.
+
+    Imports from charge_cysteine_audit.py:
+      find_cysteine_resnums, get_interface_residues, get_pmhc_cb_coords,
+      get_heavy_atom_coords, net_charge, get_binder_seq
+
+    Policy (matching updated charge_cysteine_audit.py):
+      - Any Cys = fail (all Cys positions flagged for redesign)
+      - net_charge > -2.0 = fail (interface fixed positions reported for MPNN)
+      - Interface = Cb/Ca within INTERFACE_DIST (8 A) of pMHC Cb/Ca
+    """
+    parser = _PDBParser(QUIET=True)
+    struct = parser.get_structure('s', relaxed_pdb)
+
+    binder_res, mhc_res, pep_res = [], [], []
+    for model in struct:
+        for chain in model:
+            if chain.id == binder_chain:
+                binder_res = [r for r in chain if r.id[0] == ' ']
+            elif chain.id == mhc_chain:
+                mhc_res    = [r for r in chain if r.id[0] == ' ']
+            elif chain.id == peptide_chain:
+                pep_res    = [r for r in chain if r.id[0] == ' ']
+        break
+
+    pmhc_res       = mhc_res + pep_res
+    pmhc_coords    = get_heavy_atom_coords(pmhc_res)   # heavy atoms for Cys proximity
+    pmhc_cb_coords = get_pmhc_cb_coords(pmhc_res)       # Cb/Ca for interface (BindCraft)
+
+    seq    = get_binder_seq(binder_res)
+    charge = round(net_charge(seq), 2)
+    n_cys  = seq.count('C')
+    n_met  = seq.count('M')
+
+    # Cys: any Cys = fail; interface Cys flagged separately (informational)
+    cys_resnums, cys_interface_resnums = find_cysteine_resnums(
+        binder_res, pmhc_coords
+    )
+
+    # Interface fixed residues for charge-failing designs
+    # Cb/Ca within 8 A of pMHC Cb/Ca — matches BindCraft mpnn_fix_interface
+    CHARGE_THRESH = -2.0
+    flag_charge = charge > CHARGE_THRESH
+    interface_fixed_resnums = []
+    if flag_charge:
+        interface_fixed_resnums = get_interface_residues(
+            binder_res, pmhc_cb_coords
+        )
+
+    flag_cys = n_cys > 0
+
+    return {
+        'design':                   design,
+        'sequence':                 seq,
+        'binder_length':            len(seq),
+        'net_charge':               charge,
+        'n_cys':                    n_cys,
+        'n_met':                    n_met,
+        'cys_resnums':              str(cys_resnums),
+        'cys_interface_resnums':    str(cys_interface_resnums),
+        'n_cys_interface':          len(cys_interface_resnums),
+        'interface_fixed_resnums':  str(interface_fixed_resnums),
+        'n_interface_fixed':        len(interface_fixed_resnums),
+        'flag_charge_redesign':     flag_charge,
+        'flag_cys_redesign':        flag_cys,
+        'pass_charge':              not flag_charge,
+        'pass_cys':                 not flag_cys,
+        'pass_all':                 not flag_charge and not flag_cys,
+    }
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-design orchestration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -788,6 +886,23 @@ def process_design(
 
     # BindCraft metrics (surface_hydrophobicity, interface_K/M, buns) merged from --fastrelax_tsv
 
+    # Charge / Cys / interface fixed positions for ProteinMPNN redesign
+    try:
+        redesign = compute_redesign_metrics(
+            relaxed_pdb,
+            design,
+            binder_chain='A',
+            mhc_chain='B',
+            peptide_chain=pep_chain,
+        )
+        record.update({k: v for k, v in redesign.items() if k != 'design'})
+        print(f"    Redesign: charge={redesign['net_charge']:.1f}  "
+              f"flag_charge={redesign['flag_charge_redesign']}  "
+              f"cys={redesign['cys_resnums']}  "
+              f"n_interface_fixed={redesign['n_interface_fixed']}")
+    except Exception as e:
+        print(f"    WARNING: redesign metrics failed: {e}")
+
     return record, contact_rows
 
 
@@ -909,8 +1024,31 @@ def main():
     pd.DataFrame(hbond_ct_rows).to_csv(os.path.join(contacts_dir, 'hbond_contacts.tsv'), sep='\t', index=False)
     print(f"Contact TSVs -> {contacts_dir}/")
 
+    # Save redesign TSV (same schema as charge_cysteine_audit.py output)
+    redesign_cols = [
+        'design', 'sequence', 'length', 'net_charge',
+        'n_cys', 'cys_resnums', 'cys_interface_resnums', 'n_cys_interface',
+        'n_met',
+        'interface_fixed_resnums', 'n_interface_fixed',
+        'flag_charge_redesign', 'flag_cys_redesign',
+        'pass_charge', 'pass_cys', 'pass_all',
+    ]
+
     # Save main TSV
     df = pd.DataFrame(records)
+    redesign_present = [c for c in redesign_cols if c in df.columns]
+    if redesign_present:
+        df_redesign = df[redesign_present].copy()
+        redesign_path = os.path.join(args.out_dir, 'redesign_audit.tsv')
+        df_redesign.to_csv(redesign_path, sep='\t', index=False)
+        print(f"Redesign audit -> {redesign_path}")
+        # Console summary
+        if 'pass_all' in df_redesign.columns:
+            n_pass = df_redesign['pass_all'].sum()
+            n_charge = df_redesign['flag_charge_redesign'].sum() if 'flag_charge_redesign' in df_redesign.columns else 0
+            n_cys = df_redesign['flag_cys_redesign'].sum() if 'flag_cys_redesign' in df_redesign.columns else 0
+            print(f"  Pass all: {n_pass}/{len(df_redesign)}  |  "
+                  f"flag_charge: {n_charge}  flag_cys: {n_cys}")
 
     if args.fastrelax_tsv and os.path.exists(args.fastrelax_tsv):
         df_fr = pd.read_csv(args.fastrelax_tsv, sep='\t')
@@ -979,6 +1117,13 @@ def main():
         'interface_M_pass',
         'n_interface_res', 'pass_all_bindcraft',
     ]
+    redesign_summary_cols = [
+        'net_charge', 'flag_charge_redesign', 'pass_charge',
+        'n_cys', 'cys_resnums', 'cys_interface_resnums',
+        'flag_cys_redesign', 'pass_cys',
+        'n_interface_fixed', 'interface_fixed_resnums',
+        'pass_all',
+    ]
     ros_cols   = ['rosetta_score_before', 'rosetta_score_after',
                   'rosetta_score_delta']
 
@@ -986,7 +1131,7 @@ def main():
                        and c not in ros_cols and c != 'design']
     ordered = (id_cols + af3_cols + ipsae_cols + dssp_cols
                + cms_cols + ct_sum_cols + ct_hotspot_cols + ct_pos_cols
-               + bindcraft_cols + fr_cols_present + ros_cols)
+               + bindcraft_cols + fr_cols_present + redesign_summary_cols + ros_cols)
     present = [c for c in ordered if c in df.columns]
     extras  = [c for c in df.columns if c not in present]
     df      = df[present + extras]
@@ -1023,12 +1168,6 @@ def main():
                   f"std={v.std():.3f}")
         except TypeError:
             print(f"  {col:30s}  (non-numeric, skipped)")
-#     for col in key_cols:
-#         if col in valid.columns and valid[col].notna().any().item():
-#             v = valid[col].dropna()
-#             print(f"  {col:30s}  mean={v.mean():.3f}  "
-#                   f"min={v.min():.3f}  max={v.max():.3f}  "
-#                   f"std={v.std():.3f}")
 
 
 if __name__ == '__main__':
