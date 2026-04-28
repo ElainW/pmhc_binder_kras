@@ -665,12 +665,18 @@ def process_design(
         'hotspot_positions': ','.join(str(p) for p in hotspot_positions),
     }
 
+    af3_out_dir_full = "Empty"
+    # accommodate alternative af3_out_dir
+    for out_dir in glob.glob(f"{af3_out_dir}/{design}*"):
+        if os.path.join(out_dir, f"{design}_confidences.json"):
+            af3_out_dir_full = out_dir
+
     # AF3 summary metrics
-    record.update(get_top_level_confidences(af3_out_dir, design))
-    record.update(get_top_ranking_score(af3_out_dir, design))
+    record.update(get_top_level_confidences(af3_out_dir_full, design))
+    record.update(get_top_ranking_score(af3_out_dir_full))
 
     # ipSAE — PAE-based, coordinate-independent
-    conf_path = find_top_seed_confidences(af3_out_dir, design)
+    conf_path = find_top_seed_confidences(af3_out_dir_full)
     if conf_path:
         try:
             pae, tok = load_af3_pae(conf_path)
@@ -689,7 +695,7 @@ def process_design(
         except Exception as e:
             print(f"    WARNING: ipSAE failed: {e}")
     else:
-        print(f"    WARNING: top-seed confidences.json not found")
+        print(f"    WARNING: top-seed confidences.json not found in {conf_path}")
 
     # Load pre-relaxed PDB
     relaxed_pdb = os.path.join(relaxed_pdb_dir, f'{design}_relaxed.pdb')
@@ -780,18 +786,7 @@ def process_design(
     except Exception as e:
         print(f"    WARNING: contact_map failed: {e}")
 
-    # BindCraft metrics
-    try:
-        # buns_delta_unsat and delta_unsatHbonds are read from --fastrelax_tsv
-        record['surface_hydrophobicity'] = compute_surface_hydrophobicity(pose, binder_chain='A')
-        iface_aa = compute_interface_aa_counts(pose, binder_chain='A',
-                                               target_chains=''.join(c for c in chain_ids if c != 'A'))
-        record.update(iface_aa)
-        record = apply_bindcraft_filters(record)
-        print(f"    BindCraft: hydro={record['surface_hydrophobicity']:.3f}  "
-              f"K={record['interface_K']}  M={record['interface_M']}")
-    except Exception as e:
-        print(f"    WARNING: BindCraft metrics failed: {e}")
+    # BindCraft metrics (surface_hydrophobicity, interface_K/M, buns) merged from --fastrelax_tsv
 
     return record, contact_rows
 
@@ -979,9 +974,9 @@ def main():
     )
     bindcraft_cols = [
         'buns_pass',
-        'surface_hydrophobicity', 'hydrophobicity_pass',
-        'interface_K', 'interface_K_pass',
-        'interface_M', 'interface_M_pass',
+        'hydrophobicity_pass',
+        'interface_K_pass',
+        'interface_M_pass',
         'n_interface_res', 'pass_all_bindcraft',
     ]
     ros_cols   = ['rosetta_score_before', 'rosetta_score_after',
@@ -1013,11 +1008,27 @@ def main():
     valid  = df.dropna(subset=[anchor]) if anchor in df.columns else df
     print(f"-- Summary ({len(valid)} designs with ipSAE) --")
     for col in key_cols:
-        if col in valid.columns and valid[col].notna().any():
-            v = valid[col].dropna()
+        if col not in valid.columns:
+            continue
+        col_data = valid[col]
+        if isinstance(col_data, pd.DataFrame):
+            print(f"WARNING: column '{col}' returned DataFrame shape={col_data.shape}, skipping")
+            continue
+        if not col_data.notna().any():
+            continue
+        v = col_data.dropna()
+        try:
             print(f"  {col:30s}  mean={v.mean():.3f}  "
                   f"min={v.min():.3f}  max={v.max():.3f}  "
                   f"std={v.std():.3f}")
+        except TypeError:
+            print(f"  {col:30s}  (non-numeric, skipped)")
+#     for col in key_cols:
+#         if col in valid.columns and valid[col].notna().any().item():
+#             v = valid[col].dropna()
+#             print(f"  {col:30s}  mean={v.mean():.3f}  "
+#                   f"min={v.min():.3f}  max={v.max():.3f}  "
+#                   f"std={v.std():.3f}")
 
 
 if __name__ == '__main__':
