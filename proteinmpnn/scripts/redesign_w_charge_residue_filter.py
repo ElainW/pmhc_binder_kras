@@ -12,7 +12,7 @@ Two modes:
   Mode A — new backbone PDBs (original behaviour):
     Pass --pdb_dir. No masking, all of chain A is designed.
 
-  Mode B — redesign from charge_cysteine_audit.tsv:
+  Mode B — redesign from resdesign_audit.tsv:
     Pass --audit_tsv + --split_dir.
     For each failing design, the chainA PDB is used as backbone and
     interface_fixed_resnums from the audit are passed to ProteinMPNN as
@@ -44,9 +44,9 @@ Usage — Mode A:
 
 Usage — Mode B:
     python redesign_w_charge_residue_filter.py \
-        --audit_tsv /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/charge_cysteine_audit.tsv \
+        --audit_tsv /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/<af3 dir>/redesign_audit.tsv \
         --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --out_dir   /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r2_redesign/ \
+        --out_dir   /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r2.5/ \
         --mpnn_path /path/to/proteinmpnn/python \
         --mpnn_script /path/to/ProteinMPNN/protein_mpnn_run.py \
         --n_seqs 8 --min_charge -3 --max_attempts 5 \
