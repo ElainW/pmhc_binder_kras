@@ -563,16 +563,6 @@ def main():
     df_plddt = pd.read_csv(args.plddt_tsv,       sep='\t')
     df_spec  = pd.read_csv(args.specificity_tsv, sep='\t')
 
-#     # Merge fastrelax + bindcraft cols into stats if not already present
-#     fr_cols = ['dG_separated', 'dG_separated/dSASAx100', 'dSASA_int', 'dSASA_polar',
-#                'hbonds_int', 'delta_unsatHbonds', 'sc_value', 'packstat',
-#                'per_residue_energy_int', 'nres_int', 'nres_all',
-#                'buns_delta_unsat', 'surface_hydrophobicity',
-#                'interface_n_K', 'interface_n_M']
-#     available = [c for c in fr_cols if c in df_fr.columns and c not in df_stats.columns]
-#     if available:
-#         df_stats = df_stats.merge(df_fr[['design'] + available], on='design', how='left')
-
     print(f'Loaded: {len(df_stats)} designs\n')
 
     plot_charge_cysteine(df_epi, df_seq,
