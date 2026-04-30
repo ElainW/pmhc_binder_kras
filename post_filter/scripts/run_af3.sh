@@ -64,34 +64,44 @@ sbatch -p priority -c 1 -t 0-12:00 --mem=3G -o ${slurm_dir}/af3-r2-nomsa-%j.out 
      --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
      --n_repeats   3"
 
-# # step 1: calculate stats
-# # make design_epitopes.csv
-# python write_design_epitope.py \
-#     --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta \
-#     --epitope_resnum 5 \
-#     --epitope_notes "G12D so 5th residue in the peptide"
-#     --hla A*11:01 \
-#     --target_name KRAS \
-#     --output_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv
+# step 1: calculate stats
+# make design_epitopes.csv
+python write_design_epitope.py \
+    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta \
+    --epitope_resnum 5 \
+    --epitope_notes "G12D so 5th residue in the peptide"
+    --hla A*11:01 \
+    --target_name KRAS \
+    --output_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv
 
 python af3_design_stats.py \
     --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
     --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/relaxed_pdbs/ \
     --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
     --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
-    --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/relaxed_pdbs/fastrelax_af3_scores.tsv
+    --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/fastrelax_af3_scores.tsv
 
 python af3_design_stats.py \
     --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
     --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
     --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
     --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
-    --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/relaxed_pdbs/fastrelax_af3_scores.tsv
+    --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3_nomsa/fastrelax_af3_scores.tsv
 
-# # step 2: visualize stats
-# python plot_design_stats.py \
-#     --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_design_stats.tsv \
-#     --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
-#     --sequences /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
-#     --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_your_designs.tsv \
-#     --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_plots/
+
+# step 2: visualize stats
+python plot_design_stats.py \
+    --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/af3_design_stats.tsv \
+    --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
+    --sequences /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
+    --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_your_designs.tsv \
+    --specificity_tsv /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
+    --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_plots/
+
+python plot_design_stats.py \
+    --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/af3_design_stats.tsv \
+    --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
+    --sequences /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
+    --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_your_designs.tsv \
+    --specificity_tsv /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
+    --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa_plots/
