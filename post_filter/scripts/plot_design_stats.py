@@ -411,7 +411,9 @@ def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
 
     # Normalise specificity TSV design names
     df_spec = df_spec.copy()
-    df_spec['design'] = df_spec['design'].str.removesuffix('_af2pred')
+    df_spec['design'] = (df_spec['design']
+                         .str.replace('pT', 'pt', regex=True)
+                         .str.removesuffix('_af2pred'))
 
     # Merge everything
     df = df_plddt[['design', 'monomer_plddt']].merge(
