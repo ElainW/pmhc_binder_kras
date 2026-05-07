@@ -1,5 +1,5 @@
 """
-fastrelax_af3.py
+fastrelax_designs_af3.py
 
 Runs Rosetta FastRelax on AF3 top-ranked model CIF files for a set of designs,
 then computes the full InterfaceAnalyzer score suite.
