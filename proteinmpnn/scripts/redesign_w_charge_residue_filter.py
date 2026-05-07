@@ -66,6 +66,7 @@ Usage — Mode A:
         --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py \
 
 Usage — Mode B (r2.5 redesign):
+    export PYTHONPATH="/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
     python redesign_w_charge_residue_filter.py \
         --audit_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv \
         --af3_out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/ \
@@ -90,8 +91,7 @@ import tempfile
 from pathlib import Path
 import sys
 import pandas as pd
-
-sys.path.append('/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts/')
+from Bio.PDB import MMCIFParser, PDBIO
 
 
 # ── Net charge ────────────────────────────────────────────────────────────────
@@ -123,17 +123,36 @@ def parse_fasta(fasta_path: str) -> list[dict]:
 
 
 # ── AF3 CIF discovery and conversion (imported from fastrelax_designs_af3.py) ─
-# find_model_cif and cif_to_pdb are defined in fastrelax_designs_af3.py and
+# find_model_cif is defined in fastrelax_designs_af3.py and
 # imported at runtime. fastrelax_designs_af3.py must be on sys.path (pass its
 # directory via PYTHONPATH or add it to sys.path before running this script).
 try:
-    from fastrelax_designs_af3 import find_model_cif, cif_to_pdb
+    from fastrelax_designs_af3 import find_model_cif
 except ImportError as _e:
     raise ImportError(
         "fastrelax_designs_af3.py must be on sys.path. "
         "Add its directory to PYTHONPATH or run with:\n"
         "  PYTHONPATH=/path/to/dir python redesign_w_charge_residue_filter.py ..."
     ) from _e
+
+
+
+def cif_to_pdb(cif_path: str, out_dir: str, stem: str) -> str:
+    """
+    Convert an mmCIF file to PDB format using Biopython and write to out_dir.
+    Returns the path to the written PDB file.
+
+    fastrelax_designs_af3.py provides load_cif() → PyRosetta Pose, which is
+    not suitable here since protein_mpnn_run.py requires a plain PDB file.
+    Biopython PDBIO omits CONECT/SEQRES records that confuse protein_mpnn_run.py.
+    """
+    parser   = MMCIFParser(QUIET=True)
+    struct   = parser.get_structure(stem, cif_path)
+    out_path = os.path.join(out_dir, f'{stem}.pdb')
+    io_obj   = PDBIO()
+    io_obj.set_structure(struct)
+    io_obj.save(out_path)
+    return out_path
 
 
 # ── Fixed positions JSONL ─────────────────────────────────────────────────────
@@ -279,6 +298,8 @@ def run_mpnn(python_bin: str,
     ]
     if fixed_positions_jsonl:
         cmd += ['--fixed_positions_jsonl', fixed_positions_jsonl]
+
+    print(cmd)
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
