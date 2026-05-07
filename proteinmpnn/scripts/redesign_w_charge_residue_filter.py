@@ -290,6 +290,8 @@ def run_mpnn(python_bin: str,
     stem    = design_stem(pdb_path)
 
     # Strip chain D+ so MPNN only sees ABC
+    # Write into a dedicated subdirectory so parse_multiple_chains.py
+    # sees exactly one PDB file and produces one JSONL record.
     pdb_dir      = os.path.join(tmp_dir, 'pdb')
     os.makedirs(pdb_dir, exist_ok=True)
     filtered_pdb = strip_to_abc(pdb_path, pdb_dir)
@@ -354,46 +356,43 @@ def run_mpnn(python_bin: str,
 
 # -- Rejection sampling loop ---------------------------------------------------
 
-def collect_sequences(python_bin: str,
-                      mpnn_script: str,
-                      pdb_path: str,
-                      out_dir: str,
-                      n_seqs: int,
-                      temperature: float,
-                      omit_AAs: str,
-                      design_chains: str,
-                      max_charge: float,
-                      max_attempts: int,
-                      base_seed: int = 42,
-                      fixed_resnums: list[int] | None = None,
-                      reference_seq: str | None = None) -> list[dict]:
-    """
-    Collect up to n_seqs sequences with net_charge <= max_charge.
-    Re-runs MPNN with a different seed each attempt if needed.
+# Temperature schedule for rejection sampling:
+#   Start at T=0.1 (max_attempts attempts).
+#   If still short, raise to T=0.15 (max_attempts more attempts).
+#   If still short, raise to T=0.20 (max_attempts more attempts).
+#   Never exceeds T=0.20.
+TEMP_SCHEDULE = [0.10, 0.15, 0.20]
 
-    fixed_resnums: chain A residue numbers to hold fixed (interface positions,
-      already excluding Cys -- passed directly from redesign_list.tsv).
-    reference_seq: original sequence from redesign_list.tsv, logged only.
-    """
-    collected     = []
-    seen_seqs     = set()
-    stem          = design_stem(pdb_path)
-    fixed_resnums = fixed_resnums or []
 
-    for attempt in range(1, max_attempts + 1):
+def _run_attempts(python_bin: str,
+                  mpnn_script: str,
+                  pdb_path: str,
+                  local_pdb: str,
+                  out_dir: str,
+                  n_seqs: int,
+                  temperature: float,
+                  omit_AAs: str,
+                  design_chains: str,
+                  max_attempts: int,
+                  base_seed: int,
+                  attempt_offset: int,
+                  max_charge: float,
+                  fixed_resnums: list[int],
+                  seen_seqs: set,
+                  collected: list,
+                  stem: str) -> None:
+    """
+    Run up to max_attempts MPNN calls at a fixed temperature, appending
+    accepted sequences to collected and seen_seqs in place.
+    attempt_offset ensures seed values don't repeat across temperature tiers.
+    """
+    for i in range(max_attempts):
         if len(collected) >= n_seqs:
             break
-
-        seed    = base_seed + attempt * 1000
-        tmp_dir = tempfile.mkdtemp(prefix=f'mpnn_{stem}_a{attempt}_')
-
+        attempt  = attempt_offset + i + 1
+        seed     = base_seed + attempt * 1000
+        tmp_dir  = tempfile.mkdtemp(prefix=f'mpnn_{stem}_a{attempt}_')
         try:
-            # Convert CIF -> PDB if needed (AF3 outputs are mmCIF)
-            if pdb_path.endswith('.cif'):
-                local_pdb = cif_to_pdb(pdb_path, tmp_dir, stem)
-            else:
-                local_pdb = pdb_path
-
             fasta_path = run_mpnn(
                 python_bin, mpnn_script, local_pdb,
                 tmp_dir, n_seqs, temperature, omit_AAs,
@@ -401,12 +400,9 @@ def collect_sequences(python_bin: str,
             )
             if fasta_path is None:
                 continue
-
             records = parse_fasta(fasta_path)
-            # Skip the poly-G/poly-A reference sequence (first record per backbone)
-            seqs = [r for r in records
-                    if not re.match(r'^[GA]+$', r['seq'])]
-
+            seqs    = [r for r in records
+                       if not re.match(r'^[GA]+$', r['seq'])]
             for r in seqs:
                 if len(collected) >= n_seqs:
                     break
@@ -417,22 +413,88 @@ def collect_sequences(python_bin: str,
                 if charge <= max_charge:
                     seen_seqs.add(seq)
                     collected.append({
-                        'header':        f"{stem}_a{attempt}_{r['header']}",
+                        'header':        f"{stem}_a{attempt}_T{temperature}_{r['header']}",
                         'seq':           seq,
                         'charge':        round(charge, 2),
                         'attempt':       attempt,
+                        'temperature':   temperature,
                         'n_cys':         seq.count('C'),
                         'n_met':         seq.count('M'),
                         'n_fixed':       len(fixed_resnums),
-                        'reference_seq': reference_seq or '',
+                        'reference_seq': '',
                     })
-
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+
+def collect_sequences(python_bin: str,
+                      mpnn_script: str,
+                      pdb_path: str,
+                      out_dir: str,
+                      n_seqs: int,
+                      omit_AAs: str,
+                      design_chains: str,
+                      max_charge: float,
+                      max_attempts: int,
+                      base_seed: int = 42,
+                      fixed_resnums: list[int] | None = None,
+                      reference_seq: str | None = None) -> list[dict]:
+    """
+    Collect up to n_seqs sequences with net_charge <= max_charge using a
+    three-tier temperature schedule: T=0.10 -> T=0.15 -> T=0.20.
+
+    Each tier runs up to max_attempts MPNN calls. The next tier is only
+    entered if the target count has not been reached. Never exceeds T=0.20.
+
+    fixed_resnums: chain A residue numbers to hold fixed (interface positions,
+      already excluding Cys -- passed directly from redesign_list.tsv).
+    reference_seq: original sequence from redesign_list.tsv, logged only.
+    """
+    collected     = []
+    seen_seqs     = set()
+    stem          = design_stem(pdb_path)
+    fixed_resnums = fixed_resnums or []
+
+    # Convert CIF -> PDB once; reused across all temperature tiers
+    if pdb_path.endswith('.cif'):
+        _conv_tmp = tempfile.mkdtemp(prefix=f'mpnn_{stem}_conv_')
+        local_pdb = cif_to_pdb(pdb_path, _conv_tmp, stem)
+    else:
+        _conv_tmp = None
+        local_pdb = pdb_path
+
+    try:
+        attempt_offset = 0
+        for temperature in TEMP_SCHEDULE:
+            if len(collected) >= n_seqs:
+                break
+            n_before = len(collected)
+            _run_attempts(
+                python_bin, mpnn_script, pdb_path, local_pdb,
+                out_dir, n_seqs, temperature, omit_AAs,
+                design_chains, max_attempts, base_seed,
+                attempt_offset, max_charge, fixed_resnums,
+                seen_seqs, collected, stem,
+            )
+            n_after = len(collected)
+            if n_after > n_before:
+                print(f"    T={temperature}: +{n_after - n_before} seqs "
+                      f"(total {n_after}/{n_seqs})")
+            else:
+                print(f"    T={temperature}: 0 seqs passed charge filter "
+                      f"after {max_attempts} attempts")
+            attempt_offset += max_attempts
+    finally:
+        if _conv_tmp:
+            shutil.rmtree(_conv_tmp, ignore_errors=True)
+
+    # Stamp reference_seq on collected records (set after loop to avoid closure issues)
+    for r in collected:
+        r['reference_seq'] = reference_seq or ''
+
     if len(collected) < n_seqs:
         print(f"    [WARN] {stem}: collected {len(collected)}/{n_seqs} sequences "
-              f"with charge <= {max_charge} after {max_attempts} attempts")
+              f"with charge <= {max_charge} across all temperature tiers")
 
     return collected
 
@@ -578,8 +640,8 @@ def parse_args():
                         'in the same directory')
     p.add_argument('--n_seqs',        type=int,   default=8,
                    help='Target number of sequences per backbone (default: 8)')
-    p.add_argument('--temperature',   type=float, default=0.1,
-                   help='MPNN sampling temperature (default: 0.1)')
+    # Temperature is now a fixed 3-tier schedule: 0.10 -> 0.15 -> 0.20
+    # (see TEMP_SCHEDULE). --temperature arg removed.
     p.add_argument('--omit_AAs',      default='C',
                    help='AAs to omit from design (default: C -- no Cys)')
     p.add_argument('--design_chains', default='A',
@@ -609,9 +671,9 @@ def main():
         tasks = run_mode_b(args)
 
     print(f"\nProteinMPNN settings:")
-    print(f"  n_seqs={args.n_seqs}  T={args.temperature}  omit_AAs={args.omit_AAs}  "
-          f"design_chains={args.design_chains}")
-    print(f"  max_charge<={args.max_charge}  max_attempts={args.max_attempts}\n")
+    print(f"  n_seqs={args.n_seqs}  omit_AAs={args.omit_AAs}  design_chains={args.design_chains}")
+    print(f"  max_charge<={args.max_charge}  max_attempts={args.max_attempts} per tier")
+    print(f"  temperature schedule: {TEMP_SCHEDULE} (escalates if n_seqs not reached)\n")
 
     all_results   = []
     combined_path = os.path.join(args.out_dir, 'all_sequences.fa')
@@ -629,7 +691,6 @@ def main():
                 pdb_path      = pdb_path,
                 out_dir       = args.out_dir,
                 n_seqs        = args.n_seqs,
-                temperature   = args.temperature,
                 omit_AAs      = args.omit_AAs,
                 design_chains = args.design_chains,
                 max_charge    = args.max_charge,
@@ -655,6 +716,7 @@ def main():
                     'n_cys':                       r['n_cys'],
                     'n_met':                       r['n_met'],
                     'attempt':                     r['attempt'],
+                    'temperature':                 r['temperature'],
                     'n_fixed':                     r['n_fixed'],
                     'redesign_reasons':            reasons_str,
                     'surface_hydrophobic_resnums': str(surface_hyd_resnums),
