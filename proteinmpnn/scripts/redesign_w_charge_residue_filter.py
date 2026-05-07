@@ -96,6 +96,40 @@ def net_charge(seq: str) -> float:
             - seq.count('D') - seq.count('E'))
 
 
+# -- Sequence quality filters -------------------------------------------------
+
+def sequence_passes_filters(seq: str, max_charge: float) -> tuple[bool, str]:
+    """
+    Return (passes: bool, reason: str) for a candidate sequence.
+
+    Hard filters (any failure → discard):
+      1. No Cysteine residues (independent of omit_AAs; catches edge cases
+         where a fixed interface position carries a Cys from the input PDB)
+      2. No homopolymer run of 4+ consecutive identical residues of any AA
+         (author designs show max run length of 3; long Ala/Gly runs indicate
+         low-complexity sequence recovery at T=0.1)
+      3. net_charge <= max_charge
+
+    Returns ('', '') if all filters pass, or (False, reason_string) on failure.
+    """
+    # Filter 1: no Cys
+    if 'C' in seq:
+        return False, f'cys at {[i+1 for i, aa in enumerate(seq) if aa == "C"]}'
+
+    # Filter 2: no homopolymer >= 4
+    m = re.search(r'(.)\1{3,}', seq)
+
+    if m:
+        return False, f'homopolymer {m.group(1)}x{len(m.group())} at pos {m.start()+1}'
+
+    # Filter 3: charge
+    charge = net_charge(seq)
+    if charge > max_charge:
+        return False, f'charge {charge:+.1f} > {max_charge}'
+
+    return True, ''
+
+
 # -- FASTA helpers -------------------------------------------------------------
 
 def parse_fasta(fasta_path: str) -> list[dict]:
@@ -289,7 +323,7 @@ def run_mpnn(python_bin: str,
     helpers = os.path.join(os.path.dirname(mpnn_script), 'helper_scripts')
     stem    = design_stem(pdb_path)
 
-    # Strip chain D+ so MPNN only sees ABC
+    # Strip chain D+ so MPNN only sees ABC.
     # Write into a dedicated subdirectory so parse_multiple_chains.py
     # sees exactly one PDB file and produces one JSONL record.
     pdb_dir      = os.path.join(tmp_dir, 'pdb')
@@ -406,23 +440,25 @@ def _run_attempts(python_bin: str,
             for r in seqs:
                 if len(collected) >= n_seqs:
                     break
-                seq    = r['seq']
-                charge = net_charge(seq)
+                seq = r['seq']
                 if seq in seen_seqs:
                     continue
-                if charge <= max_charge:
-                    seen_seqs.add(seq)
-                    collected.append({
-                        'header':        f"{stem}_a{attempt}_T{temperature}_{r['header']}",
-                        'seq':           seq,
-                        'charge':        round(charge, 2),
-                        'attempt':       attempt,
-                        'temperature':   temperature,
-                        'n_cys':         seq.count('C'),
-                        'n_met':         seq.count('M'),
-                        'n_fixed':       len(fixed_resnums),
-                        'reference_seq': '',
-                    })
+                passes, reason = sequence_passes_filters(seq, max_charge)
+                print(seq, passes, reason)
+                if not passes:
+                    continue
+                seen_seqs.add(seq)
+                collected.append({
+                    'header':        f"{stem}_a{attempt}_T{temperature}_{r['header']}",
+                    'seq':           seq,
+                    'charge':        round(net_charge(seq), 2),
+                    'attempt':       attempt,
+                    'temperature':   temperature,
+                    'n_cys':         seq.count('C'),
+                    'n_met':         seq.count('M'),
+                    'n_fixed':       len(fixed_resnums),
+                    'reference_seq': '',
+                })
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
