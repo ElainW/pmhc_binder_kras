@@ -13,10 +13,20 @@ Two modes:
     Pass --pdb_dir. No interface masking; all of chain A is designed.
 
   Mode B — redesign from af3_design_stats.py + collect_redesign_candidates.py + surface_hydrophobicity_resnums.py ->  redesign_list.tsv:
-    Pass --audit_tsv + --complex_dir.
 
     redesign_list.tsv schema (scripts above):
-      design	tier	needs_redesign	redesign_reasons	fixed_resnums	n_fixed_resnums	sequence	net_charge	n_cys	cys_resnums	cys_interface_resnums	n_cys_interface	n_met	interface_fixed_resnums	n_interface_fixed	saltbridge_hotspot_p5_binder_resnums	saltbridge_hotspot_p5_binder_aas	hbond_hotspot_p5_binder_resnums	hbond_hotspot_p5_binder_aas	flag_charge_redesign	flag_cys_redesign	pass_charge	pass_cys	pass_all	hard_flags_triggered	soft_flags_triggered	n_hard_flags	n_soft_flags	cms_hotspot_p5	n_contacts_hotspot_p5_polar	n_contacts_hotspot_p5_hbond	n_saltbridge_hotspot_p5	ipsae_binder_peptide	dG_separated	surface_hydrophobicity	has_salt_bridge_p5	flag_cms_hotspot_p5	ipsae_n_contacts	dG_sep_norm	dSASA_int	hbonds_int	hbonds_per_res	delta_unsatHbonds	delta_unsat_per_res	sc_value	packstat	buns_delta_unsat	interface_n_K	interface_n_M	n_binder_res	ss_helix_pct	ss_loop_pct	surface_hydrophobic_resnums	surface_hydrophobic_aas	surface_hydrophobicity_check
+    design   tier    needs_redesign  redesign_reasons
+    fixed_resnums   n_fixed_resnums sequence        net_charge
+    n_cys   cys_resnums     cys_interface_resnums   n_cys_interface n_met
+    interface_fixed_resnums n_interface_fixed        saltbridge_hotspot_p5_binder_resnums    saltbridge_hotspot_p5_binder_aas
+    hbond_hotspot_p5_binder_resnums hbond_hotspot_p5_binder_aas        flag_charge_redesign    flag_cys_redesign
+    pass_charge     pass_cys        pass_all        hard_flags_triggered    soft_flags_triggered    n_hard_flags
+    n_soft_flags    cms_hotspot_p5  n_contacts_hotspot_p5_polar        n_contacts_hotspot_p5_hbond     n_saltbridge_hotspot_p5
+    ipsae_binder_peptide    dG_separated    surface_hydrophobicity     has_salt_bridge_p5      flag_cms_hotspot_p5
+    ipsae_n_contacts        dG_sep_norm     dSASA_int       hbonds_int hbonds_per_res  delta_unsatHbonds
+    delta_unsat_per_res     sc_value        packstat        buns_delta_unsat        interface_n_K   interface_n_M
+    n_binder_res    ss_helix_pct    ss_loop_pct     surface_hydrophobic_resnums     surface_hydrophobic_aas
+    surface_hydrophobicity_check
 
     For each selected design:
       - Reads interface_fixed_resnums (binder chain A residues contacting the
@@ -54,12 +64,11 @@ Usage — Mode A:
         --out_dir   /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r3/ \
         --mpnn_path /n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python \
         --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py \
-        --n_seqs 8 --max_charge -3 --max_attempts 10
 
 Usage — Mode B (r2.5 redesign):
     python redesign_w_charge_residue_filter.py \
         --audit_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv \
-        --complex_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/ \
+        --af3_out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/ \
         --out_dir     /n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/r2.5/ \
         --mpnn_path /n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python \
         --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py \
@@ -79,8 +88,10 @@ import argparse
 import subprocess
 import tempfile
 from pathlib import Path
-
+import sys
 import pandas as pd
+
+sys.path.append('/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts/')
 
 
 # ── Net charge ────────────────────────────────────────────────────────────────
@@ -109,6 +120,20 @@ def parse_fasta(fasta_path: str) -> list[dict]:
     if header is not None:
         records.append({'header': header, 'seq': ''.join(lines)})
     return records
+
+
+# ── AF3 CIF discovery and conversion (imported from fastrelax_designs_af3.py) ─
+# find_model_cif and cif_to_pdb are defined in fastrelax_designs_af3.py and
+# imported at runtime. fastrelax_designs_af3.py must be on sys.path (pass its
+# directory via PYTHONPATH or add it to sys.path before running this script).
+try:
+    from fastrelax_designs_af3 import find_model_cif, cif_to_pdb
+except ImportError as _e:
+    raise ImportError(
+        "fastrelax_designs_af3.py must be on sys.path. "
+        "Add its directory to PYTHONPATH or run with:\n"
+        "  PYTHONPATH=/path/to/dir python redesign_w_charge_residue_filter.py ..."
+    ) from _e
 
 
 # ── Fixed positions JSONL ─────────────────────────────────────────────────────
@@ -168,7 +193,7 @@ def parse_redesign_reasons(cell) -> list[str]:
         return []
 
 
-def summarise_reasons(reasons: list[str]) -> str:
+def summarize_reasons(reasons: list[str]) -> str:
     """Return a compact human-readable summary of redesign reasons."""
     if not reasons:
         return 'none'
@@ -260,9 +285,11 @@ def run_mpnn(python_bin: str,
         print(f"    [WARN] MPNN failed (seed={seed}): {result.stderr[:300]}")
         return None
 
-    # FASTA is keyed by the filtered PDB stem (same as original since we kept the name)
-    stem  = Path(pdb_path).stem
-    fasta = os.path.join(out_dir, 'seqs', f'{stem}.fa')
+    # FASTA is keyed by the PDB stem written into tmp_dir by cif_to_pdb,
+    # which uses the design name (not the raw CIF stem with '_model' suffix).
+    raw_stem = Path(pdb_path).stem
+    stem     = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
+    fasta    = os.path.join(out_dir, 'seqs', f'{stem}.fa')
     return fasta if os.path.exists(fasta) else None
 
 
@@ -293,7 +320,9 @@ def collect_sequences(python_bin: str,
     """
     collected = []
     seen_seqs = set()
-    stem      = Path(pdb_path).stem
+    # Strip '_model' suffix that AF3 CIF filenames carry ({design}_model.cif)
+    raw_stem  = Path(pdb_path).stem
+    stem      = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
     fixed_resnums = fixed_resnums or []
 
     for attempt in range(1, max_attempts + 1):
@@ -304,13 +333,19 @@ def collect_sequences(python_bin: str,
         tmp_dir = tempfile.mkdtemp(prefix=f'mpnn_{stem}_a{attempt}_')
 
         try:
+            # Convert CIF to PDB if needed (AF3 outputs are mmCIF)
+            if pdb_path.endswith('.cif'):
+                local_pdb = cif_to_pdb(pdb_path, tmp_dir, stem)
+            else:
+                local_pdb = pdb_path
+
             fixed_jsonl = None
             if fixed_resnums:
                 fixed_jsonl = os.path.join(tmp_dir, 'fixed_positions.jsonl')
                 write_fixed_positions_jsonl(stem, fixed_resnums, fixed_jsonl)
 
             fasta_path = run_mpnn(
-                python_bin, mpnn_script, pdb_path,
+                python_bin, mpnn_script, local_pdb,
                 tmp_dir, n_seqs, temperature, omit_AAs,
                 design_chains, seed, tmp_dir, fixed_jsonl
             )
@@ -370,7 +405,7 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
     Returns list of (complex_pdb_path, fixed_resnums, reference_seq, reasons_str, surface_hydrophobic_resnums).
 
     redesign_audit.tsv columns used (schema from af3_design_stats.py):
-      design              — design name; used to locate {design}_complex.pdb
+      design              — design name; used to discover AF3 CIF via find_model_cif()
       needs_redesign      — bool; primary selection flag
       redesign_reasons    — list of reason strings; parsed for logging
       fixed_resnums       — pre-computed fixed positions (interface residues,
@@ -422,17 +457,20 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
     for _, row in selected.iterrows():
         design = row['design']
 
-        complex_pdb = os.path.join(args.complex_dir, f'{design}.pdb')
-        if not os.path.exists(complex_pdb):
-            print(f"  [WARN] complex PDB not found, skipping: {complex_pdb}")
+        # Discover AF3 model CIF (handles timestamped subdirectory suffixes)
+        cif_path = find_model_cif(args.af3_out_dir, design)
+        if not cif_path:
+            print(f"  [WARN] model CIF not found for '{design}' "
+                  f"in {args.af3_out_dir}, skipping")
             continue
+        print(f"    CIF: {cif_path}")
 
         # Use fixed_resnums directly — af3_design_stats.py already excludes Cys
         fixed_resnums = parse_resnums_from_audit(row.get('fixed_resnums', '[]'))
 
         # Parse redesign reasons for logging
         reasons     = parse_redesign_reasons(row.get('redesign_reasons', '[]'))
-        reasons_str = summarise_reasons(reasons)
+        reasons_str = summarize_reasons(reasons)
 
         ref_seq = str(row.get('sequence', '')) or None
 
@@ -441,7 +479,7 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
             row.get('surface_hydrophobic_resnums', '[]')
         )
 
-        tasks.append((complex_pdb, fixed_resnums, ref_seq, reasons_str, surface_hyd_resnums))
+        tasks.append((cif_path, fixed_resnums, ref_seq, reasons_str, surface_hyd_resnums))
 
         hyd_note = f"  surface_hyd={len(surface_hyd_resnums)} res" if surface_hyd_resnums else ""
         print(f"  {design}: charge={row['net_charge']:+.1f}  "
@@ -468,9 +506,8 @@ def parse_args():
                       help='Mode B: redesign_audit.tsv from af3_design_stats.py')
 
     # Mode B options
-    p.add_argument('--complex_dir',
-                   help='Mode B: directory containing {design}.cif files '
-                        '(chain A=binder, chain B=MHC, chain C=peptide)')
+    p.add_argument('--af3_out_dir',
+                   help='Mode B: AF3 output root directory containing '                        '{design}_YYYYMMDD_HHMMSS/{design}_model.cif subdirs')
 
     redesign = p.add_mutually_exclusive_group()
     redesign.add_argument('--redesign_failing_any',    action='store_true', default=True,
@@ -517,8 +554,8 @@ def main():
     if args.pdb_dir:
         tasks = run_mode_a(args)
     else:
-        if not args.complex_dir:
-            raise ValueError('--complex_dir is required with --audit_tsv (Mode B)')
+        if not args.af3_out_dir:
+            raise ValueError('--af3_out_dir is required with --audit_tsv (Mode B)')
         tasks = run_mode_b(args)
 
     print(f"\nProteinMPNN settings:")
@@ -531,7 +568,8 @@ def main():
 
     with open(combined_path, 'w') as combined_fa:
         for i, (pdb_path, fixed_resnums, ref_seq, reasons_str, surface_hyd_resnums) in enumerate(tasks):
-            stem = Path(pdb_path).stem
+            raw_stem = Path(pdb_path).stem
+            stem     = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
             hyd_note = f"  surface_hyd={len(surface_hyd_resnums)}" if surface_hyd_resnums else ""
             print(f"[{i+1}/{len(tasks)}] {stem}  "
                   f"(fixed={len(fixed_resnums)} res  reasons=[{reasons_str}]{hyd_note})")
