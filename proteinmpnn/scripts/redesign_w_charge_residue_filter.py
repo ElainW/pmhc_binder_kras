@@ -449,7 +449,7 @@ def _run_attempts(python_bin: str,
                     continue
                 seen_seqs.add(seq)
                 collected.append({
-                    'header':        f"{stem}_a{attempt}_T{temperature}_{r['header']}",
+                    'header':        f"{stem}_a{attempt}_t{temperature}_{r['header']}",
                     'seq':           seq,
                     'charge':        round(net_charge(seq), 2),
                     'attempt':       attempt,
