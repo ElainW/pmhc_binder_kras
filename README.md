@@ -16,10 +16,10 @@ The following is cloned from github:
     - remove cysteines
     - only get negatively charged sequences
     - control for hydrophobicity (at least to be the same as authors’ designs: 30-50% hydrophobic residues)
+    - redesign without affecting key interface residues (inspired by BindCraft)
     - **TO-DO**:
         - check spatial aggregation propensity
         - increase or preserve the number of hydrogen bonds, if possible
-        - redesigning without affecting the interface (inspired by BindCraft)
 - After AF2 initial guess, filter the set with ipSAE between the mini binder and the peptide
 - Inspired by BindCraft, add a structure relaxation and energy minization step
     - Calculate interface energy, buried surface area, hydrogen bonds, packing (shape complementarity), per-residue energy
