@@ -23,8 +23,8 @@ Usage:
 
     python surface_hydrophobicity_resnums.py \
         --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
-        --in_tsv          /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tsv \
-        --out_tsv         /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean_hydrophobic.tsv
+        --in_tsv          /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tmp \
+        --out_tsv         /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tsv
 
     # Specific designs only:
     python surface_hydrophobicity_resnums.py \
