@@ -381,7 +381,7 @@ def main():
     parser.add_argument('--inspect',     metavar='DESIGN',
                         help='Inspect chain layout of one design and exit')
     parser.add_argument('--dalphaball',
-                        default='/n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc',
+                        default='./DAlphaBall.gcc',
                         help='Path to DAlphaBall binary for BuriedUnsatHbonds SASA calculation')
     args = parser.parse_args()
 
