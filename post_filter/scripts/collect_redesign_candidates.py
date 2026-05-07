@@ -28,10 +28,10 @@ Output:
 
 Usage:
     python collect_redesign_candidates.py \
-        --tier1_tsv           /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/prioritization/tier1.tsv \
-        --redesign_cand_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/prioritization/redesign_candidate.tsv \
-        --audit_tsv           /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_design_stats.tsv \
-        --out_path            /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/prioritization/redesign_list.tsv
+        --tier1_tsv           /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/tier1.tsv \
+        --redesign_cand_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_candidate.tsv \
+        --audit_tsv           /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/af3_design_stats.tsv \
+        --out_path            /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tmp
 """
 
 import os
@@ -107,7 +107,35 @@ def main():
         'pass_charge', 'pass_cys', 'pass_all',
     ]
     audit_present = [c for c in audit_cols if c in df_audit.columns]
-    df = df_priority.merge(df_audit[audit_present], on='design', how='left')
+    df = df_priority.merge(df_audit[audit_present], on='design', how='left',
+                          suffixes=('_priority', '_audit'))
+
+    # Check for conflicts between priority TSV and audit TSV values
+    for check_col in ['net_charge', 'pass_all']:
+        col_p = f'{check_col}_priority'
+        col_a = f'{check_col}_audit'
+        if col_p in df.columns and col_a in df.columns:
+            # Compare — allow small float tolerance for net_charge
+            if check_col == 'net_charge':
+                mismatch = df[
+                    (df[col_p].notna()) & (df[col_a].notna()) &
+                    ((df[col_p] - df[col_a]).abs() > 0.01)
+                ]
+            else:
+                mismatch = df[
+                    (df[col_p].notna()) & (df[col_a].notna()) &
+                    (df[col_p] != df[col_a])
+                ]
+            if len(mismatch):
+                print(f"\nERROR: {check_col} mismatch between priority TSV and audit TSV "
+                      f"for {len(mismatch)} design(s):")
+                for _, r in mismatch.iterrows():
+                    print(f"  {r['design']}: priority={r[col_p]}  audit={r[col_a]}")
+            # Keep the audit version as authoritative (more complete source)
+            df[check_col] = df[col_a]
+            df = df.drop(columns=[col_p, col_a])
+        elif check_col in df.columns:
+            pass  # only one source, no conflict possible
 
     # ── Determine redesign need and reasons ──────────────────────────────────
     def _redesign_reasons(row) -> list[str]:
@@ -180,22 +208,34 @@ def main():
     df_redesign.to_csv(args.out_path, sep='\t', index=False)
     print(f"\nSaved -> {args.out_path}")
 
+    # ── Output clean designs (no redesign needed) ─────────────────────────────
+    df_clean = df[~df['needs_redesign']].copy()
+    # Compute fixed_resnums for clean designs too (needed for MPNN even if no redesign)
+    df_clean['fixed_resnums']   = df_clean.apply(_fixed_resnums, axis=1).apply(str)
+    df_clean['n_fixed_resnums'] = df_clean['fixed_resnums'].apply(
+        lambda x: len(ast.literal_eval(x)) if x not in ('[]','') else 0
+    )
+    df_clean['redesign_reasons'] = '[]'
+    clean_present = [c for c in present + extras if c in df_clean.columns]
+    df_clean = df_clean[clean_present].sort_values('cms_hotspot_p5', ascending=False)
+    clean_path = args.out_path.replace('.tsv', '_clean.tsv')
+    df_clean.to_csv(clean_path, sep='\t', index=False)
+    print(f"Clean designs (no redesign) -> {clean_path}")
+
     # ── Console summary ───────────────────────────────────────────────────────
     print(f"\n{'Design':<45} {'tier':<22} {'reasons'}")
     print('-' * 90)
     for _, r in df_redesign.iterrows():
         print(f"  {r['design']:<43} {r['tier']:<22} {r['redesign_reasons']}")
 
-    # Also print designs NOT needing redesign (pass all, good candidates as-is)
-    df_clean = df[~df['needs_redesign']].copy()
-    if len(df_clean):
-        print(f"\nNo redesign needed ({len(df_clean)} designs — ready for experimental validation):")
-        for _, r in df_clean.sort_values('cms_hotspot_p5', ascending=False).iterrows():
-            sb  = int(r.get('n_saltbridge_hotspot_p5', 0) or 0)
-            hb  = int(r.get('n_contacts_hotspot_p5_hbond', 0) or 0)
-            cms = r.get('cms_hotspot_p5', float('nan'))
-            print(f"  {r['design']:<45} tier={r['tier']:<12} "
-                  f"cms_p5={cms:.1f}  SB={sb}  hbond_p5={hb}")
+    print(f"\nNo redesign needed ({len(df_clean)} designs — ready for experimental validation):")
+    for _, r in df_clean.sort_values('cms_hotspot_p5', ascending=False).iterrows():
+        sb  = int(r.get('n_saltbridge_hotspot_p5', 0) or 0)
+        hb  = int(r.get('n_contacts_hotspot_p5_hbond', 0) or 0)
+        cms = r.get('cms_hotspot_p5', float('nan'))
+        print(f"  {r['design']:<45} tier={r['tier']:<12} "
+              f"cms_p5={cms:.1f}  SB={sb}  hbond_p5={hb}  "
+              f"fixed_n={r.get('n_fixed_resnums', 0)}")
 
 
 if __name__ == '__main__':
