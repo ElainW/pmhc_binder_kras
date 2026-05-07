@@ -12,7 +12,8 @@ Two modes:
   Mode A — new backbone PDBs (original behaviour):
     Pass --pdb_dir. No interface masking; all of chain A is designed.
 
-  Mode B — redesign from af3_design_stats.py + collect_redesign_candidates.py + surface_hydrophobicity_resnums.py ->  redesign_list.tsv:
+  Mode B — redesign from af3_design_stats.py + collect_redesign_candidates.py
+            + surface_hydrophobicity_resnums.py -> redesign_list.tsv:
 
     redesign_list.tsv schema (scripts above):
     design   tier    needs_redesign  redesign_reasons
@@ -29,43 +30,36 @@ Two modes:
     surface_hydrophobicity_check
 
     For each selected design:
-      - Reads interface_fixed_resnums (binder chain A residues contacting the
-        peptide in the AF3 relaxed structure at < 4 Å)
-      - Reads cys_resnums (all Cys positions on chain A, regardless of location)
-      - Fixed positions = interface_fixed_resnums minus cys_resnums
-        (zero-Cys policy: Cys must be redesigned even at the interface)
-      - Feeds --complex_dir/{design}_complex.pdb to MPNN with --pdb_path_chains A
-        so MPNN sees the full pMHC context (chain B / C) while designing chain A
-
-    --complex_dir should contain {design}_complex.pdb files with the
-    3-chain AF3 layout:
-      chain A = binder, chain B = MHC (truncated alpha-chain), chain C = peptide
-    MPNN designs chain A with chains B and C as fixed structural context.
+      - Reads fixed_resnums (pre-computed by upstream scripts, already excludes Cys)
+      - Discovers AF3 model CIF from timestamped subdirs in --af3_out_dir
+      - Converts CIF -> PDB (Biopython), strips chains beyond ABC, runs MPNN
+      - MPNN designs chain A with chains B (MHC) and C (peptide) as fixed context
 
     Select which designs to redesign:
       --redesign_failing_charge   flag_charge_redesign == True
       --redesign_failing_cys      flag_cys_redesign == True
-      --redesign_failing_any      pass_all == False  [default]
+      --redesign_failing_any      needs_redesign == True  [default]
       --redesign_all              all designs in the TSV
 
-  The sequence column in redesign_audit.tsv is used only for logging/comparison;
+  The sequence column in redesign_list.tsv is used only for logging/comparison;
   ProteinMPNN reads the sequence from the input PDB.
 
-Fixed positions mechanism:
-  write_fixed_positions_jsonl() writes a tmp JSONL:
-    {"<pdb_stem>": {"A": [res1, res2, ...]}}
-  ProteinMPNN reads this and holds those residues fixed (preserves the PDB
-  sequence at those positions) while freely designing all other chain A residues.
-  This is equivalent to BindCraft's mpnn_fix_interface=True.
+ProteinMPNN pipeline (helper-script variant):
+  For each backbone and each rejection-sampling attempt:
+    1. parse_multiple_chains.py  -> parsed_pdbs.jsonl
+    2. assign_fixed_chains.py    -> assigned_chains.jsonl
+    3. make_fixed_positions_dict.py -> fixed_positions.jsonl  (only if fixed_resnums)
+    4. protein_mpnn_run.py       -> seqs/{stem}.fa
+  helper_scripts/ is located at os.path.dirname(--mpnn_script)/helper_scripts/
 
-Usage — Mode A:
+Usage -- Mode A:
     python redesign_w_charge_residue_filter.py \
         --pdb_dir   /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r3/ \
         --out_dir   /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r3/ \
         --mpnn_path /n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python \
-        --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py \
+        --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py
 
-Usage — Mode B (r2.5 redesign):
+Usage -- Mode B (r2.5 redesign):
     export PYTHONPATH="/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
     python redesign_w_charge_residue_filter.py \
         --audit_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv \
@@ -94,7 +88,7 @@ import pandas as pd
 from Bio.PDB import MMCIFParser, PDBIO
 
 
-# ── Net charge ────────────────────────────────────────────────────────────────
+# -- Net charge ----------------------------------------------------------------
 
 def net_charge(seq: str) -> float:
     """Physiological net charge: R + K + 0.1*H - D - E"""
@@ -102,10 +96,10 @@ def net_charge(seq: str) -> float:
             - seq.count('D') - seq.count('E'))
 
 
-# ── FASTA helpers ─────────────────────────────────────────────────────────────
+# -- FASTA helpers -------------------------------------------------------------
 
 def parse_fasta(fasta_path: str) -> list[dict]:
-    """Parse ProteinMPNN FASTA → [{header, seq}]."""
+    """Parse ProteinMPNN FASTA -> [{header, seq}]."""
     records = []
     header, lines = None, []
     with open(fasta_path) as f:
@@ -122,19 +116,19 @@ def parse_fasta(fasta_path: str) -> list[dict]:
     return records
 
 
-# ── AF3 CIF discovery and conversion (imported from fastrelax_designs_af3.py) ─
-# find_model_cif is defined in fastrelax_designs_af3.py and
-# imported at runtime. fastrelax_designs_af3.py must be on sys.path (pass its
-# directory via PYTHONPATH or add it to sys.path before running this script).
+# -- AF3 CIF discovery and conversion -----------------------------------------
+# find_model_cif is imported from fastrelax_designs_af3.py (identical function).
+# cif_to_pdb is defined locally -- fastrelax_designs_af3.py uses load_cif()
+# which returns a PyRosetta Pose; we need a plain PDB file for protein_mpnn_run.py.
+
 try:
     from fastrelax_designs_af3 import find_model_cif
 except ImportError as _e:
     raise ImportError(
         "fastrelax_designs_af3.py must be on sys.path. "
-        "Add its directory to PYTHONPATH or run with:\n"
-        "  PYTHONPATH=/path/to/dir python redesign_w_charge_residue_filter.py ..."
+        "Add its directory to PYTHONPATH, e.g.:\n"
+        "  export PYTHONPATH=/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
     ) from _e
-
 
 
 def cif_to_pdb(cif_path: str, out_dir: str, stem: str) -> str:
@@ -142,7 +136,7 @@ def cif_to_pdb(cif_path: str, out_dir: str, stem: str) -> str:
     Convert an mmCIF file to PDB format using Biopython and write to out_dir.
     Returns the path to the written PDB file.
 
-    fastrelax_designs_af3.py provides load_cif() → PyRosetta Pose, which is
+    fastrelax_designs_af3.py provides load_cif() -> PyRosetta Pose, which is
     not suitable here since protein_mpnn_run.py requires a plain PDB file.
     Biopython PDBIO omits CONECT/SEQRES records that confuse protein_mpnn_run.py.
     """
@@ -155,27 +149,11 @@ def cif_to_pdb(cif_path: str, out_dir: str, stem: str) -> str:
     return out_path
 
 
-# ── Fixed positions JSONL ─────────────────────────────────────────────────────
-
-def write_fixed_positions_jsonl(pdb_stem: str,
-                                fixed_resnums: list[int],
-                                out_path: str):
-    """
-    Write a ProteinMPNN fixed_positions_jsonl for one PDB.
-    Format: {"<pdb_stem>": {"A": [resnum1, resnum2, ...]}}
-
-    Residue numbers must match the PDB exactly (1-indexed, renumbered from 1
-    as written by split_pmhc_fold_pdbs.py or af3_design_stats.py).
-    An empty list tells MPNN to design all of chain A freely.
-    """
-    data = {pdb_stem: {'A': sorted(fixed_resnums)}}
-    with open(out_path, 'w') as f:
-        f.write(json.dumps(data) + '\n')
-
+# -- Audit TSV parsers ---------------------------------------------------------
 
 def parse_resnums_from_audit(cell) -> list[int]:
     """
-    Parse a cell from redesign_audit.tsv that looks like:
+    Parse a cell from redesign_list.tsv that looks like:
       '[]'  or  '[12, 34, 56]'
     Returns a list of ints. Handles NaN/None gracefully.
     """
@@ -191,15 +169,15 @@ def parse_resnums_from_audit(cell) -> list[int]:
 def parse_redesign_reasons(cell) -> list[str]:
     """
     Parse the redesign_reasons column from af3_design_stats.py output.
-    Cell format: '['charge>-2.0', 'cys=[52]']' or '[]' or NaN.
+    Cell format: "['charge>-2.0', 'cys=[52]']" or '[]' or NaN.
 
     Known reason tokens and their meaning:
-      'charge>-2.0'          net charge above threshold   → rejection-sample for charge
-      'cys=[N,...]'          Cys present                  → omit_AAs C handles this
-      'surface_hydrophobicity' high surface hydrophobicity → free redesign of non-fixed residues
-      'ipsae_binder_peptide'  low peptide ipSAE            → logged; MPNN cannot fix directly
-      'packstat'             poor packing                 → logged; free redesign may help
-      'buns_delta_unsat'     buried unsatisfied H-bonds   → logged; free redesign may help
+      'charge>-2.0'            net charge above threshold   -> rejection-sample for charge
+      'cys=[N,...]'            Cys present                  -> omit_AAs C handles this
+      'surface_hydrophobicity' high surface hydrophobicity  -> free redesign of non-fixed residues
+      'ipsae_binder_peptide'   low peptide ipSAE            -> logged; MPNN cannot fix directly
+      'packstat'               poor packing                 -> logged; free redesign may help
+      'buns_delta_unsat'       buried unsatisfied H-bonds   -> logged; free redesign may help
 
     Returns a list of reason strings (empty list if none or unparseable).
     """
@@ -235,7 +213,7 @@ def summarize_reasons(reasons: list[str]) -> str:
     return '+'.join(tags)
 
 
-# ── Core MPNN runner ──────────────────────────────────────────────────────────
+# -- Chain filtering -----------------------------------------------------------
 
 KEEP_CHAINS = {'A', 'B', 'C'}
 
@@ -244,8 +222,8 @@ def strip_to_abc(pdb_path: str, tmp_dir: str) -> str:
     """
     Write a copy of pdb_path retaining only ATOM/HETATM lines for chains A, B, C.
     AF3 outputs may have a 4th chain (e.g. chain D for a second peptide or
-    cofactor); MPNN must not see it. The stem is preserved so MPNN's output
-    FASTA filename still matches the original design name.
+    cofactor); MPNN must not see it. The filename is preserved so MPNN's output
+    FASTA key still matches the design stem.
     """
     out_path = os.path.join(tmp_dir, Path(pdb_path).name)
     with open(pdb_path) as fh, open(out_path, 'w') as out:
@@ -258,6 +236,31 @@ def strip_to_abc(pdb_path: str, tmp_dir: str) -> str:
     return out_path
 
 
+# -- Stem helper ---------------------------------------------------------------
+
+def design_stem(path: str) -> str:
+    """
+    Return the design name from a file path.
+    AF3 CIF files are named {design}_model.cif -> strip '_model' suffix.
+    Plain PDB files are named {design}.pdb -> use stem directly.
+    """
+    raw = Path(path).stem
+    return raw[:-6] if raw.endswith('_model') else raw
+
+
+# -- ProteinMPNN helper-script pipeline ----------------------------------------
+
+def run_subprocess(cmd: list[str], label: str) -> bool:
+    """Run a subprocess; print full stderr on failure. Returns True on success."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"    [WARN] {label} failed")
+        print(f"    CMD: {' '.join(cmd)}")
+        print(f"    STDERR:\n{result.stderr}")
+        return False
+    return True
+
+
 def run_mpnn(python_bin: str,
              mpnn_script: str,
              pdb_path: str,
@@ -268,53 +271,88 @@ def run_mpnn(python_bin: str,
              design_chains: str,
              seed: int,
              tmp_dir: str,
-             fixed_positions_jsonl: str | None = None) -> str | None:
+             fixed_resnums: list[int] | None = None) -> str | None:
     """
-    Run standalone protein_mpnn_run.py on a single PDB.
-    Returns path to output FASTA, or None on failure.
+    Run ProteinMPNN on a single PDB using the helper-script pipeline:
+      1. parse_multiple_chains.py  -> parsed_pdbs.jsonl
+      2. assign_fixed_chains.py    -> assigned_chains.jsonl
+      3. make_fixed_positions_dict.py -> fixed_positions.jsonl  (if fixed_resnums)
+      4. protein_mpnn_run.py       -> seqs/{stem}.fa
 
-    Chains beyond A/B/C are stripped before passing to MPNN (AF3 structures
-    can have a 4th chain that should be ignored). MPNN designs chain A with
-    chains B and C as fixed structural context.
+    helper_scripts/ is located at os.path.dirname(mpnn_script)/helper_scripts/.
 
-    fixed_positions_jsonl: JSONL from write_fixed_positions_jsonl(); those
-      chain A residues are held fixed, all others are freely designed.
+    Chains beyond A/B/C are stripped before parsing. design_chains specifies
+    which chain(s) to design (default 'A'); all others are fixed context.
+    fixed_resnums: chain A 1-indexed residue numbers to hold fixed.
     """
     os.makedirs(out_dir, exist_ok=True)
+    helpers = os.path.join(os.path.dirname(mpnn_script), 'helper_scripts')
+    stem    = design_stem(pdb_path)
 
-    # Strip chain D+ into a temp copy so MPNN only sees ABC
-    filtered_pdb = strip_to_abc(pdb_path, tmp_dir)
+    # Strip chain D+ so MPNN only sees ABC
+    pdb_dir      = os.path.join(tmp_dir, 'pdb')
+    os.makedirs(pdb_dir, exist_ok=True)
+    filtered_pdb = strip_to_abc(pdb_path, pdb_dir)
 
+    # Intermediate JSONL paths (all in tmp_dir)
+    parsed_jsonl   = os.path.join(tmp_dir, 'parsed_pdbs.jsonl')
+    assigned_jsonl = os.path.join(tmp_dir, 'assigned_chains.jsonl')
+    fixed_jsonl    = os.path.join(tmp_dir, 'fixed_positions.jsonl') if fixed_resnums else None
+
+    # Step 1: parse_multiple_chains.py
+    if not run_subprocess([
+        python_bin,
+        os.path.join(helpers, 'parse_multiple_chains.py'),
+        f'--input_path={pdb_dir}',
+        f'--output_path={parsed_jsonl}',
+    ], 'parse_multiple_chains'):
+        return None
+
+    # Step 2: assign_fixed_chains.py -- which chain(s) to design
+    if not run_subprocess([
+        python_bin,
+        os.path.join(helpers, 'assign_fixed_chains.py'),
+        f'--input_path={parsed_jsonl}',
+        f'--output_path={assigned_jsonl}',
+        '--chain_list', design_chains,
+    ], 'assign_fixed_chains'):
+        return None
+
+    # Step 3: make_fixed_positions_dict.py -- fix interface residues on chain A
+    if fixed_resnums:
+        resnums_str = ' '.join(str(r) for r in sorted(fixed_resnums))
+        if not run_subprocess([
+            python_bin,
+            os.path.join(helpers, 'make_fixed_positions_dict.py'),
+            f'--input_path={parsed_jsonl}',
+            f'--output_path={fixed_jsonl}',
+            '--chain_list',    'A',
+            '--position_list', resnums_str,
+        ], 'make_fixed_positions_dict'):
+            return None
+
+    # Step 4: protein_mpnn_run.py
     cmd = [
         python_bin, mpnn_script,
-        '--pdb_path',           filtered_pdb,
+        '--jsonl_path',         parsed_jsonl,
+        '--chain_id_jsonl',     assigned_jsonl,
         '--out_folder',         out_dir,
         '--num_seq_per_target', str(n_seqs),
         '--sampling_temp',      str(temperature),
         '--omit_AAs',           omit_AAs,
-        '--pdb_path_chains',    design_chains,
         '--seed',               str(seed),
         '--batch_size',         '1',
     ]
-    if fixed_positions_jsonl:
-        cmd += ['--fixed_positions_jsonl', fixed_positions_jsonl]
-
-    print(cmd)
-
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        print(f"    [WARN] MPNN failed (seed={seed}): {result.stderr[:300]}")
+    if fixed_jsonl:
+        cmd += ['--fixed_positions_jsonl', fixed_jsonl]
+    if not run_subprocess(cmd, f'protein_mpnn_run (seed={seed})'):
         return None
 
-    # FASTA is keyed by the PDB stem written into tmp_dir by cif_to_pdb,
-    # which uses the design name (not the raw CIF stem with '_model' suffix).
-    raw_stem = Path(pdb_path).stem
-    stem     = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
-    fasta    = os.path.join(out_dir, 'seqs', f'{stem}.fa')
+    fasta = os.path.join(out_dir, 'seqs', f'{stem}.fa')
     return fasta if os.path.exists(fasta) else None
 
 
-# ── Rejection sampling loop ───────────────────────────────────────────────────
+# -- Rejection sampling loop ---------------------------------------------------
 
 def collect_sequences(python_bin: str,
                       mpnn_script: str,
@@ -333,17 +371,13 @@ def collect_sequences(python_bin: str,
     Collect up to n_seqs sequences with net_charge <= max_charge.
     Re-runs MPNN with a different seed each attempt if needed.
 
-    fixed_resnums: chain A residue numbers to hold fixed (interface positions
-      minus any Cys). Passed via --fixed_positions_jsonl.
-
-    reference_seq: original sequence from redesign_audit.tsv, logged for
-      comparison but not used to constrain the design.
+    fixed_resnums: chain A residue numbers to hold fixed (interface positions,
+      already excluding Cys -- passed directly from redesign_list.tsv).
+    reference_seq: original sequence from redesign_list.tsv, logged only.
     """
-    collected = []
-    seen_seqs = set()
-    # Strip '_model' suffix that AF3 CIF filenames carry ({design}_model.cif)
-    raw_stem  = Path(pdb_path).stem
-    stem      = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
+    collected     = []
+    seen_seqs     = set()
+    stem          = design_stem(pdb_path)
     fixed_resnums = fixed_resnums or []
 
     for attempt in range(1, max_attempts + 1):
@@ -354,21 +388,16 @@ def collect_sequences(python_bin: str,
         tmp_dir = tempfile.mkdtemp(prefix=f'mpnn_{stem}_a{attempt}_')
 
         try:
-            # Convert CIF to PDB if needed (AF3 outputs are mmCIF)
+            # Convert CIF -> PDB if needed (AF3 outputs are mmCIF)
             if pdb_path.endswith('.cif'):
                 local_pdb = cif_to_pdb(pdb_path, tmp_dir, stem)
             else:
                 local_pdb = pdb_path
 
-            fixed_jsonl = None
-            if fixed_resnums:
-                fixed_jsonl = os.path.join(tmp_dir, 'fixed_positions.jsonl')
-                write_fixed_positions_jsonl(stem, fixed_resnums, fixed_jsonl)
-
             fasta_path = run_mpnn(
                 python_bin, mpnn_script, local_pdb,
                 tmp_dir, n_seqs, temperature, omit_AAs,
-                design_chains, seed, tmp_dir, fixed_jsonl
+                design_chains, seed, tmp_dir, fixed_resnums,
             )
             if fasta_path is None:
                 continue
@@ -408,10 +437,10 @@ def collect_sequences(python_bin: str,
     return collected
 
 
-# ── Mode A: new backbone PDB directory ───────────────────────────────────────
+# -- Mode A: new backbone PDB directory ----------------------------------------
 
-def run_mode_a(args) -> list[tuple[str, list[int], str | None]]:
-    """Returns list of (pdb_path, fixed_resnums=[], reference_seq=None)."""
+def run_mode_a(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
+    """Returns list of (pdb_path, fixed_resnums=[], reference_seq=None, reasons, hyd)."""
     pdb_files = sorted(glob.glob(os.path.join(args.pdb_dir, args.pattern)))
     if not pdb_files:
         raise ValueError(f"No PDB files in {args.pdb_dir} matching {args.pattern}")
@@ -419,25 +448,24 @@ def run_mode_a(args) -> list[tuple[str, list[int], str | None]]:
     return [(pdb, [], None, 'none', []) for pdb in pdb_files]
 
 
-# ── Mode B: redesign from redesign_audit.tsv ─────────────────────────────────
+# -- Mode B: redesign from redesign_list.tsv -----------------------------------
 
 def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
     """
-    Returns list of (complex_pdb_path, fixed_resnums, reference_seq, reasons_str, surface_hydrophobic_resnums).
+    Returns list of (cif_path, fixed_resnums, reference_seq, reasons_str, surface_hyd_resnums).
 
-    redesign_audit.tsv columns used (schema from af3_design_stats.py):
-      design              — design name; used to discover AF3 CIF via find_model_cif()
-      needs_redesign      — bool; primary selection flag
-      redesign_reasons    — list of reason strings; parsed for logging
-      fixed_resnums       — pre-computed fixed positions (interface residues,
-                            already excluding Cys — produced by af3_design_stats.py)
-      sequence            — original sequence (logged for comparison)
-      net_charge          — logged
-      n_cys               — logged
-      flag_charge_redesign — secondary selection flag
-      flag_cys_redesign   — secondary selection flag
-      pass_all            — secondary selection flag
-      surface_hydrophobic_resnums — logged only; interface_fixed_resnums unchanged
+    redesign_list.tsv columns used:
+      design                      -- design name; used to discover AF3 CIF
+      needs_redesign              -- bool; primary selection flag
+      redesign_reasons            -- list of reason strings; parsed for logging
+      fixed_resnums               -- pre-computed fixed positions (already excludes Cys)
+      sequence                    -- original sequence (logged for comparison)
+      net_charge                  -- logged
+      n_cys                       -- logged
+      flag_charge_redesign        -- secondary selection flag
+      flag_cys_redesign           -- secondary selection flag
+      pass_all                    -- secondary selection flag
+      surface_hydrophobic_resnums -- logged only; fixed_resnums unchanged
     """
     audit = pd.read_csv(args.audit_tsv, sep='\t')
 
@@ -450,8 +478,8 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
     missing = required - set(audit.columns)
     if missing:
         raise ValueError(
-            f"redesign_audit.tsv is missing columns: {missing}\n"
-            f"Expected schema from af3_design_stats.py. Found: {list(audit.columns)}"
+            f"redesign_list.tsv is missing columns: {missing}\n"
+            f"Found: {list(audit.columns)}"
         )
 
     # Select designs
@@ -461,18 +489,18 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
         selected = audit[audit['flag_charge_redesign'] == True]
     elif args.redesign_failing_cys:
         selected = audit[audit['flag_cys_redesign'] == True]
-    else:  # redesign_failing_any (default) — use needs_redesign as primary flag
+    else:  # redesign_failing_any (default)
         selected = audit[audit['needs_redesign'] == True]
 
-    n_needs   = int(audit['needs_redesign'].sum())
-    n_charge  = int(audit['flag_charge_redesign'].sum())
-    n_cys     = int(audit['flag_cys_redesign'].sum())
+    n_needs    = int(audit['needs_redesign'].sum())
+    n_charge   = int(audit['flag_charge_redesign'].sum())
+    n_cys      = int(audit['flag_cys_redesign'].sum())
     n_pass_all = int((audit['pass_all'] == False).sum())
 
     print(f"Mode B: {len(audit)} designs in audit TSV")
     print(f"  needs_redesign: {n_needs}  |  charge fail: {n_charge}  |  "
           f"cys fail: {n_cys}  |  pass_all fail: {n_pass_all}")
-    print(f"  → redesigning {len(selected)} designs")
+    print(f"  -> redesigning {len(selected)} designs")
 
     tasks = []
     for _, row in selected.iterrows():
@@ -486,7 +514,7 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
             continue
         print(f"    CIF: {cif_path}")
 
-        # Use fixed_resnums directly — af3_design_stats.py already excludes Cys
+        # fixed_resnums already excludes Cys (produced by upstream scripts)
         fixed_resnums = parse_resnums_from_audit(row.get('fixed_resnums', '[]'))
 
         # Parse redesign reasons for logging
@@ -495,7 +523,7 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
 
         ref_seq = str(row.get('sequence', '')) or None
 
-        # Surface hydrophobic residues — logged only, interface_fixed_resnums unchanged
+        # Surface hydrophobic residues -- logged only, fixed_resnums unchanged
         surface_hyd_resnums = parse_resnums_from_audit(
             row.get('surface_hydrophobic_resnums', '[]')
         )
@@ -511,7 +539,7 @@ def run_mode_b(args) -> list[tuple[str, list[int], str | None, str, list[int]]]:
     return tasks
 
 
-# ── Argument parsing ──────────────────────────────────────────────────────────
+# -- Argument parsing ----------------------------------------------------------
 
 def parse_args():
     p = argparse.ArgumentParser(
@@ -524,15 +552,16 @@ def parse_args():
     mode.add_argument('--pdb_dir',
                       help='Mode A: directory of backbone PDB files')
     mode.add_argument('--audit_tsv',
-                      help='Mode B: redesign_audit.tsv from af3_design_stats.py')
+                      help='Mode B: redesign_list.tsv from upstream audit scripts')
 
     # Mode B options
     p.add_argument('--af3_out_dir',
-                   help='Mode B: AF3 output root directory containing '                        '{design}_YYYYMMDD_HHMMSS/{design}_model.cif subdirs')
+                   help='Mode B: AF3 output root directory containing '
+                        '{design}_YYYYMMDD_HHMMSS/{design}_model.cif subdirs')
 
     redesign = p.add_mutually_exclusive_group()
     redesign.add_argument('--redesign_failing_any',    action='store_true', default=True,
-                          help='Redesign designs where pass_all==False [default]')
+                          help='Redesign designs where needs_redesign==True [default]')
     redesign.add_argument('--redesign_failing_charge', action='store_true',
                           help='Redesign only designs where flag_charge_redesign==True')
     redesign.add_argument('--redesign_failing_cys',    action='store_true',
@@ -545,13 +574,14 @@ def parse_args():
     p.add_argument('--mpnn_path',     required=True,
                    help='Python binary for ProteinMPNN environment')
     p.add_argument('--mpnn_script',   required=True,
-                   help='Path to protein_mpnn_run.py')
+                   help='Path to protein_mpnn_run.py; helper_scripts/ must be '
+                        'in the same directory')
     p.add_argument('--n_seqs',        type=int,   default=8,
                    help='Target number of sequences per backbone (default: 8)')
     p.add_argument('--temperature',   type=float, default=0.1,
                    help='MPNN sampling temperature (default: 0.1)')
     p.add_argument('--omit_AAs',      default='C',
-                   help='AAs to omit from design (default: C — no Cys)')
+                   help='AAs to omit from design (default: C -- no Cys)')
     p.add_argument('--design_chains', default='A',
                    help='Chain(s) to design; all others are fixed context '
                         '(default: A)')
@@ -565,13 +595,12 @@ def parse_args():
     return p.parse_args()
 
 
-# ── Main ─────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 
 def main():
     args = parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
 
-    # Build task list: [(pdb_path, fixed_resnums, reference_seq), ...]
     if args.pdb_dir:
         tasks = run_mode_a(args)
     else:
@@ -589,8 +618,7 @@ def main():
 
     with open(combined_path, 'w') as combined_fa:
         for i, (pdb_path, fixed_resnums, ref_seq, reasons_str, surface_hyd_resnums) in enumerate(tasks):
-            raw_stem = Path(pdb_path).stem
-            stem     = raw_stem[:-6] if raw_stem.endswith('_model') else raw_stem
+            stem     = design_stem(pdb_path)
             hyd_note = f"  surface_hyd={len(surface_hyd_resnums)}" if surface_hyd_resnums else ""
             print(f"[{i+1}/{len(tasks)}] {stem}  "
                   f"(fixed={len(fixed_resnums)} res  reasons=[{reasons_str}]{hyd_note})")
@@ -618,19 +646,19 @@ def main():
                       f"{r['seq'][:40]}...")
                 combined_fa.write(f">{r['header']}\n{r['seq']}\n")
                 all_results.append({
-                    'backbone':        stem,
-                    'pdb_path':        pdb_path,
-                    'header':          r['header'],
-                    'seq':             r['seq'],
-                    'length':          len(r['seq']),
-                    'net_charge':      r['charge'],
-                    'n_cys':           r['n_cys'],
-                    'n_met':           r['n_met'],
-                    'attempt':         r['attempt'],
-                    'n_fixed':         r['n_fixed'],
-                    'redesign_reasons': reasons_str,
+                    'backbone':                    stem,
+                    'pdb_path':                    pdb_path,
+                    'header':                      r['header'],
+                    'seq':                         r['seq'],
+                    'length':                      len(r['seq']),
+                    'net_charge':                  r['charge'],
+                    'n_cys':                       r['n_cys'],
+                    'n_met':                       r['n_met'],
+                    'attempt':                     r['attempt'],
+                    'n_fixed':                     r['n_fixed'],
+                    'redesign_reasons':            reasons_str,
                     'surface_hydrophobic_resnums': str(surface_hyd_resnums),
-                    'reference_seq':   r['reference_seq'],
+                    'reference_seq':               r['reference_seq'],
                 })
 
     log      = pd.DataFrame(all_results)
@@ -643,7 +671,7 @@ def main():
     if len(all_results):
         n_full = (log.groupby('backbone').size() == args.n_seqs).sum()
         print(f"  Backbones with full {args.n_seqs} seqs: {n_full}/{len(tasks)}")
-        print(f"  Net charge — "
+        print(f"  Net charge -- "
               f"mean={log['net_charge'].mean():.1f}  "
               f"min={log['net_charge'].min():.1f}  "
               f"max={log['net_charge'].max():.1f}")
@@ -652,10 +680,10 @@ def main():
               f"({100*(log['attempt'] > 1).mean():.0f}%)")
         if log['n_cys'].sum() > 0:
             print(f"  WARNING: {(log['n_cys'] > 0).sum()} sequences still contain Cys "
-                  f"— increase --max_attempts or verify --omit_AAs includes C")
+                  f"-- increase --max_attempts or verify --omit_AAs includes C")
         if log['n_met'].sum() > 0 and 'M' in args.omit_AAs:
             print(f"  WARNING: {(log['n_met'] > 0).sum()} sequences still contain Met "
-                  f"— increase --max_attempts")
+                  f"-- increase --max_attempts")
     print(f"  Combined FASTA: {combined_path}")
     print(f"  Log TSV:        {log_path}")
     print(f"{'='*60}")
