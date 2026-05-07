@@ -9,7 +9,7 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 - net_charge uses physiological formula: R + K + 0.1*H - D - E
 - Cysteine: ANY Cys in the binder fails — no exceptions for disulfides or
   interface positions. Cys residue numbers are reported for MPNN redesign.
-- Charge-failing designs: output interface residues (Cβ/Cα within 4.5Å of pMHC Cβ/Cα)
+- ALL designs: output interface residues (Cβ/Cα within 4.5Å of pMHC Cβ/Cα)
   as fixed positions that should NOT be redesigned in ProteinMPNN.
   This matches BindCraft's mpnn_fix_interface definition.
 - Fails loudly if split PDBs are missing (no fallback)
@@ -223,10 +223,9 @@ def main():
         # Cβ/Cα within 4.5 Å of pMHC Cβ/Cα — matches BindCraft mpnn_fix_interface
         flag_charge             = charge > CHARGE_THRESH
         interface_fixed_resnums = []
-        if flag_charge:
-            interface_fixed_resnums = get_interface_residues(
+        interface_fixed_resnums = get_interface_residues(
                 binder_res, pmhc_cb_coords, dist_cutoff=INTERFACE_DIST
-            )
+        )
 
         flag_cys = n_cys > 0
 

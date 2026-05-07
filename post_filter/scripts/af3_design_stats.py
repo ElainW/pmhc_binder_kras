@@ -709,10 +709,9 @@ def compute_redesign_metrics(
     CHARGE_THRESH = -2.0
     flag_charge = charge > CHARGE_THRESH
     interface_fixed_resnums = []
-    if flag_charge:
-        interface_fixed_resnums = get_interface_residues(
-            binder_res, pmhc_cb_coords
-        )
+    interface_fixed_resnums = get_interface_residues(
+        binder_res, pmhc_cb_coords
+    )
 
     flag_cys = n_cys > 0
 
