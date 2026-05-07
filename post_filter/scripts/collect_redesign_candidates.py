@@ -218,7 +218,7 @@ def main():
     df_clean['redesign_reasons'] = '[]'
     clean_present = [c for c in present + extras if c in df_clean.columns]
     df_clean = df_clean[clean_present].sort_values('cms_hotspot_p5', ascending=False)
-    clean_path = args.out_path.replace('.tsv', '_clean.tsv')
+    clean_path = args.out_path.replace('.tmp', '_clean.tmp')
     df_clean.to_csv(clean_path, sep='\t', index=False)
     print(f"Clean designs (no redesign) -> {clean_path}")
 
