@@ -154,22 +154,25 @@ def parse_mpnn_fasta(fasta_file: str) -> dict:
                     raw_token        = line.lstrip('>').split(',')[0]
                     current_stem     = _normalise_output_stem(raw_token)
                     current_backbone = _backbone_from_stem(current_stem)
+                    sample_match     = re.search(r'\bsample=(\d+)', line)
+                    current_sample   = int(sample_match.group(1)) if sample_match else None
                     in_old_native    = False
 
                 elif _OLD_DESIGNED_RE.match(line):
                     # ── Old format: designed entry (>T=0.1, sample=N, ...) ─
                     # current_backbone already set by preceding native header
                     old_sample_count += 1
-                    current_stem  = (f"{current_backbone}"
-                                     f"_sample{old_sample_count:02d}")
-                    in_old_native = False
+                    current_stem   = (f"{current_backbone}"
+                                      f"_sample{old_sample_count:02d}")
+                    current_sample = old_sample_count
+                    in_old_native  = False
 
                 else:
                     # ── Old format: native header ───────────────────────────
-                    # Extract backbone name and reset sample counter
                     raw_token        = line.lstrip('>').split(',')[0].strip()
                     current_backbone = raw_token
-                    current_stem     = None   # native — no sequence stored
+                    current_stem     = None
+                    current_sample   = None
                     old_sample_count = 0
                     in_old_native    = True
 
@@ -178,6 +181,7 @@ def parse_mpnn_fasta(fasta_file: str) -> dict:
                 if current_stem and not in_old_native and line:
                     designs[current_stem].append({
                         'backbone': current_backbone,
+                        'sample':   current_sample,
                         'score':    current_score,
                         'sequence': line,
                     })
@@ -339,7 +343,9 @@ def main(args):
                 skipped += 1
                 continue
 
-            out_name = f"{output_stem}.pdb"
+            out_name = (f"{output_stem}_s{design['sample']}.pdb"
+                        if design['sample'] is not None
+                        else f"{output_stem}.pdb")
             out_path = os.path.join(args.output_dir, out_name)
 
             try:
