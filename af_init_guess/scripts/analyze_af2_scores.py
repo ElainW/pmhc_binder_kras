@@ -21,11 +21,13 @@ Usage:
 """
 
 import os
+import sys
 import re
 import glob
 import shutil
 import argparse
 import subprocess
+from pathlib import Path
 
 import pandas as pd
 import numpy as np
@@ -315,6 +317,7 @@ def extract_top_pdbs(top, silent_dir, out_dir):
 
     os.makedirs(out_dir, exist_ok=True)
     tags = top['description'].tolist()
+    print(len(tags))
 
     silent_files = sorted(glob.glob(os.path.join(silent_dir, '*.silent')))
     if not silent_files:
@@ -362,9 +365,11 @@ def extract_top_pdbs(top, silent_dir, out_dir):
 
         # silentextractspecific <silent_file> <tag1> <tag2> ...
         cmd = [tool, sf] + sf_tags
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=out_dir)
+        my_env = os.environ.copy()
+        my_env["PATH"] = f"{Path(sys.executable).parent}:" + my_env["PATH"]
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=out_dir, env=my_env)
         if result.returncode != 0:
-            print(f"    WARNING: silentextractspecific error: {result.stderr[:200]}")
+            print(f"    WARNING: silentextractspecific error: {result.stderr}")
 
         os.remove(tag_file)
 
@@ -502,7 +507,7 @@ Example:
         --plddt_cutoff 70.0 \\
         --binder_rmsd_cutoff 2.0 \\
         --target_rmsd_cutoff 5.0 \\
-        --top_n 20
+        --top_n 50
         """
     )
     parser.add_argument('--score_dir',  required=True,
@@ -518,7 +523,7 @@ Example:
     parser.add_argument('--plddt_cutoff',         type=float, default=70.0)
     parser.add_argument('--binder_rmsd_cutoff',   type=float, default=2.0)
     parser.add_argument('--target_rmsd_cutoff',   type=float, default=5.0)
-    parser.add_argument('--top_n', type=int, default=20,
+    parser.add_argument('--top_n', type=int, default=50,
                         help='Number of top candidates to extract PDBs for (default 20)')
     return parser.parse_args()
 
