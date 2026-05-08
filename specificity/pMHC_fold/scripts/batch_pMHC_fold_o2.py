@@ -8,6 +8,7 @@ Submits pMHC fold jobs to O2 SLURM cluster.
 On-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_on \
+        --round r2 \
         --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGADGVGK \
@@ -15,13 +16,34 @@ On-target example:
         --structs_per_job 20 \
         --t 01:30:00
 
+    python batch_pMHC_fold_o2.py \
+        --prefix pmhc_fold_on \
+        --round r2.5 \
+        --script /n/groups/marks/users/aaron/pmhc_cp/specificity/pMHC_fold/scripts/pmhc_fold.py \
+        --alleles "A*11:01" \
+        --peptides VVGADGVGK \
+        --minib_dir /n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r2.5/af2_kras/top_pdbs/ \
+        --structs_per_job 20 \
+        --t 01:30:00
+
 Off-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_off \
+        --round r2 \
         --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGAGGVGK \
         --minib_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
+        --structs_per_job 20 \
+        --t 01:30:00
+
+    python batch_pMHC_fold_o2.py \
+        --prefix pmhc_fold_off \
+        --round r2.5 \
+        --script /n/groups/marks/users/aaron/pmhc_cp/specificity/pMHC_fold/scripts/pmhc_fold.py \
+        --alleles "A*11:01" \
+        --peptides VVGAGGVGK \
+        --minib_dir /n/groups/marks/users/aaron/pmhc_cp/specificity/pMHC_fold/inputs/r2.5/off_target_pdbs/ \
         --structs_per_job 20 \
         --t 01:30:00
 """
@@ -71,7 +93,7 @@ def extract_protein_sequences(pdb_file):
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 MODEL_WEIGHTS = (
-    "/n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/"
+    "/n/groups/marks/users/aaron/pmhc_cp/pMHCI_binder_design/pMHC_fold/"
     "datasets_alphafold_finetune/params/"
     "mixed_mhc_pae_run6_af_mhc_params_20640.pkl"
 )
@@ -103,6 +125,7 @@ MHC_DIR = "/n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/pmhc_pd
 
 parser = ArgumentParser()
 parser.add_argument("--prefix",          type=str, required=True)
+parser.add_argument("--round",           type=str, required=True)
 parser.add_argument("--script",          type=str, required=True)
 parser.add_argument("--alleles",         nargs='+', required=True)
 parser.add_argument("--peptides",        nargs='+', required=True)
@@ -129,10 +152,10 @@ total_path      = os.getcwd()
 
 # ── Directory setup ───────────────────────────────────────────────────────────
 
-runs_path     = os.path.join(os.path.dirname(total_path), "outputs", "r2", f"{prefix}_runs") # will update r2 in future rounds
+runs_path     = os.path.join(os.path.dirname(total_path), "outputs", args.round, f"{prefix}_runs")
 commands_path = os.path.join(total_path, f"{prefix}_commands")
-slurm_path    = os.path.join(os.path.dirname(total_path), "slurm", "r2", prefix) # will update r2 in future rounds
-splits_path   = os.path.join(os.path.dirname(total_path), "inputs", "r2", f"{prefix}_splits") # will update r2 in future rounds
+slurm_path    = os.path.join(os.path.dirname(total_path), "slurm", args.round, prefix)
+splits_path   = os.path.join(os.path.dirname(total_path), "inputs", args.round, f"{prefix}_splits")
 
 os.makedirs(runs_path,   exist_ok=True)
 os.makedirs(commands_path, exist_ok=True)
