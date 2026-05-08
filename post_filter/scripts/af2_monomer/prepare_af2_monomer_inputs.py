@@ -11,8 +11,7 @@ Usage:
     python prepare_af2_monomer_inputs.py \
         --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
         --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --author_csv /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/science_adv0185_data_s1.csv \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
+        --out_fasta /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
 """
 
 import os
@@ -46,14 +45,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--merged_scores', required=True)
     parser.add_argument('--pdb_dir',       required=True)
-    parser.add_argument('--author_csv',   required=True)
-    parser.add_argument('--out_fasta',        required=True)
+    parser.add_argument('--out_dir',     required=True)
+
     args = parser.parse_args()
 
-    out_dir = os.path.dirname(args.out_fasta)
+    out_dir = args.out_dir
     os.makedirs(args.out_dir, exist_ok=True)
 
-    # ── 1. Your 49 designs ───────────────────────────────────────────────────
+    # ── 1. Your x designs ───────────────────────────────────────────────────
     df = pd.read_csv(args.merged_scores, sep='\t')
     passing = df[df['delta_pae_int_peptide'] < DELTA_PAE_CUTOFF].copy()
     print(f"Loading sequences for {len(passing)} passing designs...")
@@ -68,48 +67,46 @@ def main():
         seq = get_binder_seq(pdb_path)
         your_records.append({'name': design, 'sequence': seq, 'source': 'your_designs'})
 
-    # ── 2. Author sequences from xlsx ────────────────────────────────────────
-    print("Loading author sequences from csv...")
-    data = pd.read_csv(args.author_csv)
-    print(data)
+#     # ── 2. Author sequences from xlsx ────────────────────────────────────────
+#     print("Loading author sequences from csv...")
+#     data = pd.read_csv(args.author_csv)
+#     print(data)
 
-    name_col = 'Binder name'
-    seq_col  = 'Amino acid sequence'
+#     name_col = 'Binder name'
+#     seq_col  = 'Amino acid sequence'
 
-    author_records = []
-    for _, row in data.iterrows():
-        name = str(row[name_col]).strip()
-        seq  = str(row[seq_col]).strip()
-        if name and seq and seq != 'nan':
-            author_records.append({
-                'name': f'author_{name}',
-                'sequence': seq,
-                'source': 'author_liu2025'
-            })
+#     author_records = []
+#     for _, row in data.iterrows():
+#         name = str(row[name_col]).strip()
+#         seq  = str(row[seq_col]).strip()
+#         if name and seq and seq != 'nan':
+#             author_records.append({
+#                 'name': f'author_{name}',
+#                 'sequence': seq,
+#                 'source': 'author_liu2025'
+#             })
 
-    print(f"  {len(author_records)} author sequences loaded")
+#     print(f"  {len(author_records)} author sequences loaded")
 
     # ── 3. Combine and write FASTA ────────────────────────────────────────────
-    all_records = your_records + author_records
-    total = len(all_records)
+    total = len(your_records)
 
-    fasta_path = args.out_fasta
+    fasta_path = os.path.join(args.out_dir, 'af2_monomer_inputs.fasta')
     with open(fasta_path, 'w') as f:
-        for rec in all_records:
+        for rec in your_records:
             f.write(f">{rec['name']}\n{rec['sequence']}\n")
 
     print(f"\nWritten {total} sequences to {fasta_path}")
     print(f"  Your designs: {len(your_records)}")
-    print(f"  Author designs: {len(author_records)}")
 
     # Also write a CSV for reference
-    seq_df = pd.DataFrame(all_records)
+    seq_df = pd.DataFrame(your_records)
     seq_df.to_csv(os.path.join(args.out_dir, 'af2_monomer_sequences.csv'), index=False)
 
-    # Print author sequences for verification
-    print("\n── Author sequences ──")
-    for rec in author_records:
-        print(f"  {rec['name']}: {rec['sequence'][:30]}... (len={len(rec['sequence'])})")
+#     # Print author sequences for verification
+#     print("\n── Author sequences ──")
+#     for rec in author_records:
+#         print(f"  {rec['name']}: {rec['sequence'][:30]}... (len={len(rec['sequence'])})")
 
 if __name__ == '__main__':
     main()
