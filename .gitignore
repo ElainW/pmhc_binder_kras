@@ -47,6 +47,7 @@ specificity/pMHC_fold/outputs/
 specificity/.ipynb_checkpoints/
 specificity/pMHC_fold/scripts/.ipynb_checkpoints/
 specificity/pMHC_fold/slurm/
+specificity/pMHC_fold/scripts/pmhc_fold_*
 specificity/analysis/r*/
 specificity/analysis/.ipynb_checkpoints/
 specificity/ESMIF/inputs/
