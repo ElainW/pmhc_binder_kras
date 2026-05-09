@@ -36,13 +36,40 @@ init("-mute all")
 
 # ── Chain utilities ───────────────────────────────────────────────────────────
 
+def get_chain_index_by_letter(pose, chain_letter):
+    """
+    Return the PyRosetta internal chain index (1-based) for a given PDB chain
+    letter, using pdb_info to look up the actual letter rather than assuming
+    alphabetical order.  Raises ValueError if the chain is not found.
+
+    This is necessary because PyRosetta numbers chains by their order of
+    appearance in the PDB file, which may differ from alphabetical order
+    (e.g. chain D first, then A, B, C).
+    """
+    pdb_info = pose.pdb_info()
+    for chain_idx in range(1, pose.num_chains() + 1):
+        # any residue in this chain will do; use the first one
+        res_idx = pose.chain_begin(chain_idx)
+        if pdb_info.chain(res_idx) == chain_letter:
+            return chain_idx
+    raise ValueError(
+        f"Chain '{chain_letter}' not found in pose. "
+        f"Available chains: "
+        + ", ".join(
+            pose.pdb_info().chain(pose.chain_begin(i))
+            for i in range(1, pose.num_chains() + 1)
+        )
+    )
+
+
 def get_chain_pose(pose, chain="A"):
-    chain_id = ord(chain) - ord('A') + 1
-    return pose.split_by_chain(chain_id)
+    """Extract a single chain subpose by PDB chain letter."""
+    chain_idx = get_chain_index_by_letter(pose, chain)
+    return pose.split_by_chain(chain_idx)
 
 
 def get_ca_coords(pose, chain):
-    """Return (N, 3) array of Cα coordinates for the given chain letter."""
+    """Return (N, 3) array of Cα coordinates for a given PDB chain letter."""
     subpose = get_chain_pose(pose, chain)
     coords = []
     for i in range(1, subpose.total_residue() + 1):
