@@ -85,7 +85,17 @@ def get_top_ranking_score(af3_out_dir: str) -> dict:
         return {}
 
 
-# ── Override: process_design — inject server-layout af3_out_dir_full ─────────
+# Save original process_design BEFORE patching to avoid infinite recursion
+_original_process_design = af3_design_stats.process_design
+
+# Patch module-level discovery functions (safe — no circular reference)
+af3_design_stats.find_model_cif            = find_model_cif
+af3_design_stats.find_top_seed_confidences = find_top_seed_confidences
+af3_design_stats.get_top_level_confidences = get_top_level_confidences
+af3_design_stats.get_top_ranking_score     = get_top_ranking_score
+
+
+# ── Override: process_design — resolve per-design subdir for server layout ────
 
 def process_design(
     design: str,
@@ -94,25 +104,16 @@ def process_design(
     target_info: dict,
 ) -> tuple[dict, dict[str, list]]:
     """
-    Thin wrapper over af3_design_stats.process_design that injects the
-    correct per-design subdirectory for the AF3 server layout and patches
-    the module-level discovery functions before calling through.
+    Resolves the per-design subdirectory ({af3_out_dir}/{design}/) and calls
+    the original af3_design_stats.process_design with that path, so the
+    overridden discovery functions glob within the correct directory.
     """
-    # Patch the module so process_design's internal calls use server functions
-    af3_design_stats.find_model_cif            = find_model_cif
-    af3_design_stats.find_top_seed_confidences = find_top_seed_confidences
-    af3_design_stats.get_top_level_confidences = get_top_level_confidences
-    af3_design_stats.get_top_ranking_score     = get_top_ranking_score
-
-    # Server layout: {af3_out_dir}/{design}/fold_{design}_*
-    # Pass the design-specific subdirectory as af3_out_dir so the overridden
-    # find_top_seed_confidences (which takes only af3_out_dir) works correctly
     design_dir = os.path.join(af3_out_dir, design)
     if not os.path.isdir(design_dir):
         print(f"    WARNING: design directory not found: {design_dir}")
-        design_dir = af3_out_dir  # fallback
+        design_dir = af3_out_dir   # fallback
 
-    return af3_design_stats.process_design(
+    return _original_process_design(
         design          = design,
         af3_out_dir     = design_dir,
         relaxed_pdb_dir = relaxed_pdb_dir,
@@ -120,13 +121,8 @@ def process_design(
     )
 
 
-# ── main() is inherited from af3_design_stats via star import ────────────────
-# Override the module-level functions before main() runs
-af3_design_stats.find_model_cif            = find_model_cif
-af3_design_stats.find_top_seed_confidences = find_top_seed_confidences
-af3_design_stats.get_top_level_confidences = get_top_level_confidences
-af3_design_stats.get_top_ranking_score     = get_top_ranking_score
-af3_design_stats.process_design            = process_design
+# ── Patch process_design last (after _original_process_design is saved) ───────
+af3_design_stats.process_design = process_design
 
 
 if __name__ == '__main__':
