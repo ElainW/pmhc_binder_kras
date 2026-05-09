@@ -27,5 +27,5 @@ The following is cloned from github:
 - **TO DO** Experiment percentage of amino acids in loops, given that the current designs have very low percentage of those
 - Use AF3 as a final step to validate the binding interaction. Notice in first round, discrepancy between AF3 and AF2 initial guess produced interface
     - If there are discrepancies, perhaps use docking (haddock or proclust) —> diff-dock/boltz 2 may be better for high-throughput screens, Rosetta is better for polar interactions
-- Generate authors' designs structures and see where my designs fit in the distribution (**TO DO**: will be getting author's full sequence designs and predicted structures soon). See more details in post_filter/inputs/author_design_stats/README.md
+- Generate authors' designs structures and see where my designs fit in the distribution. See more details in post_filter/inputs/author_design_stats/README.md
 - **TO DO** Predict sites for ADA binding (hard to degrade, not T cell)
