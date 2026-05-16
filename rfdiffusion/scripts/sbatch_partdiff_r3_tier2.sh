@@ -38,7 +38,7 @@ set -euo pipefail
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
 R2_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered
-R3_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r3
+R3_OUT_ROOT=/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3
 
 # ── Tier 2 settings ───────────────────────────────────────────────────────────
 BACKBONES=(

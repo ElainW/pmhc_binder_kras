@@ -22,7 +22,7 @@
 # orient_255_pT12__33   (1–3 C4 contacts across samples)
 # orient_255_pT12__46   (1 C4 contact)
 # orient_255_pT12__70   (2 C4 contacts)
-# orient_34_pt12__67    (1 C4 contact)
+# orient_34_pT12__67    (1 C4 contact)
 #
 # partial_T=12, noise_scale_ca=0, noise_scale_frame=0
 # Near-deterministic refinement — preserves existing backbone geometry
@@ -42,7 +42,7 @@ set -euo pipefail
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
 R2_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered
-R3_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r3
+R3_OUT_ROOT=/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3
 
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
 BACKBONES=(
