@@ -19,7 +19,7 @@
 # orient_255_pT12__2    (1 C4 contact, sample08)
 # orient_255_pT12__18   (1 C4 contact)
 # orient_255_pT12__31   (1 C4 contact)
-# orient_255_pT12__33   (1–3 C4 contacts across samples)
+# orient_255_pT12__33   (1-3 C4 contacts across samples)
 # orient_255_pT12__46   (1 C4 contact)
 # orient_255_pT12__70   (2 C4 contacts)
 # orient_34_pT12__67    (1 C4 contact)
@@ -28,20 +28,27 @@
 # Near-deterministic refinement — preserves existing backbone geometry
 # while biasing ProteinMPNN toward C4 engagement via hotspot
 #
-# Hotspots: C4, C6, C7 (peptide positions, mapped from PDB residue numbers)
+# Preprocessing: last 9 residues of chain B are split into chain C
+# so that hotspot residues C4, C6, C7 map correctly.
+# Split PDBs are written to R3_SPLIT_DIR and not kept after the job.
+#
+# Hotspots: C4, C6, C7 (peptide positions 4, 6, 7)
 # 100 designs per backbone → 800 total trajectories
 #
-# Chain layout in input PDBs:
+# Chain layout in split input PDBs:
 #   Chain A = binder  (partially diffused)
 #   Chain B = MHC     (fixed)
-#   Chain C = peptide (fixed)
+#   Chain C = peptide (fixed, renumbered 1-9)
 # =============================================================================
 set -euo pipefail
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
+SPLIT_SCRIPT=/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/scripts/split_peptide_chain.py
+
 R2_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered
+R3_SPLIT_DIR=/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/split_pdbs
 R3_OUT_ROOT=/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3
 
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
@@ -61,19 +68,26 @@ NOISE_CA=0
 NOISE_FRAME=0
 TIER=1
 
+# ── Preprocess: split peptide into chain C ────────────────────────────────────
+echo "Splitting peptide chain for tier ${TIER} backbones..."
+"$PYTHON" "$SPLIT_SCRIPT" \
+    --input_dir  "$R2_PDB_DIR" \
+    --output_dir "$R3_SPLIT_DIR" \
+    --backbones  "${BACKBONES[@]}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 get_chain_range() {
     local pdb=$1 chain=$2
     local start end
-    start=$(grep "^ATOM" "$pdb" | awk -v c="$chain" '$5==c {print $6+0}' | sort -n | head -1)
-    end=$(  grep "^ATOM" "$pdb" | awk -v c="$chain" '$5==c {print $6+0}' | sort -n | tail -1)
+    start=$(grep "^ATOM" "$pdb" | awk -v c="$chain" 'substr($0,22,1)==c {print substr($0,23,4)+0}' | sort -n | head -1)
+    end=$(  grep "^ATOM" "$pdb" | awk -v c="$chain" 'substr($0,22,1)==c {print substr($0,23,4)+0}' | sort -n | tail -1)
     echo "${start}-${end}"
 }
 
 get_chain_res() {
     local pdb=$1 chain=$2 n=$3
     grep "^ATOM" "$pdb" \
-        | awk -v c="$chain" '$5==c {print $6+0}' \
+        | awk -v c="$chain" 'substr($0,22,1)==c {print substr($0,23,4)+0}' \
         | sort -un \
         | sed -n "${n}p"
 }
@@ -89,15 +103,15 @@ echo "  Started: $(date)"
 echo "============================================================"
 
 for bb in "${BACKBONES[@]}"; do
-    input_pdb="${R2_PDB_DIR}/${bb}.pdb"
+    input_pdb="${R3_SPLIT_DIR}/${bb}.pdb"
     out_prefix="${R3_OUT_ROOT}/tier${TIER}/${bb}/${bb}_pT${PARTIAL_T}_"
 
     if [[ ! -f "$input_pdb" ]]; then
-        echo "[WARN] PDB not found: ${input_pdb} — skipping ${bb}"
+        echo "[WARN] Split PDB not found: ${input_pdb} — skipping ${bb}"
         continue
     fi
 
-    BINDER_LEN=$(grep "^ATOM" "$input_pdb" | awk '$5=="A" {print $6+0}' | sort -un | wc -l)
+    BINDER_LEN=$(grep "^ATOM" "$input_pdb" | awk 'substr($0,22,1)=="A" {print substr($0,23,4)+0}' | sort -un | wc -l)
     RANGE_B=$(get_chain_range "$input_pdb" "B")
     RANGE_C=$(get_chain_range "$input_pdb" "C")
     CONTIGS="[${BINDER_LEN}-${BINDER_LEN}/0 B${RANGE_B}/0 C${RANGE_C}]"
