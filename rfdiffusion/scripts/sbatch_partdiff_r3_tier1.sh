@@ -2,8 +2,8 @@
 #SBATCH --job-name=kras_partdiff_r3_t1
 #SBATCH --partition=gpu_quad,gpu
 #SBATCH --qos=gpuquad_qos
-#SBATCH --time=8:00:00
-#SBATCH --mem=10G
+#SBATCH --time=4:00:00
+#SBATCH --mem=3G
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
