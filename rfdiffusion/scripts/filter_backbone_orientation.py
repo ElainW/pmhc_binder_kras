@@ -74,7 +74,7 @@ def calc_helix_segments(pose, binder_chain="A"):
 
 def check_helix_segments(pose, binder_chain="A",
                           min_helix_segs=2,
-                          min_helix_length=4):
+                          min_helix_length=7):
     """
     Filter out backbones with too few helix segments or where individual
     helices are too short to be meaningful.
@@ -84,7 +84,7 @@ def check_helix_segments(pose, binder_chain="A",
                           — set to 2 to eliminate single-helix backbones,
                             set to 3 if you specifically want 3-helix bundles
         min_helix_length: minimum number of consecutive H residues to count
-                          as a real helix, not a frayed cap (default: 4)
+                          as a real helix, not a frayed cap (default: 7)
 
     Returns:
         result dict with ss_string, n_helix_segs, helix_fraction, passes
@@ -226,7 +226,7 @@ def filter_orientation_structure(
     max_angle=60.0,
     max_lateral_dist=20.0,
     min_helix_segs=2,
-    min_helix_length=4,
+    min_helix_length=7,
     pattern="*.pdb",
 ):
     """
@@ -247,7 +247,7 @@ def filter_orientation_structure(
                           — set to 2 to eliminate single-helix backbones,
                             set to 3 if you specifically want 3-helix bundles
         min_helix_length: minimum number of consecutive H residues to count
-                          as a real helix, not a frayed cap (default: 4)
+                          as a real helix, not a frayed cap (default: 7)
         pattern:               Glob pattern for PDB files
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -389,8 +389,8 @@ def parse_args():
     parser.add_argument(
         "--min_helix_length",
         type=int,
-        default=4,
-        help="Minimum consecutive helix residues to count as a real helix (default: 4). "
+        default=7,
+        help="Minimum consecutive helix residues to count as a real helix (default: 7). "
              "Filters out frayed helix caps annotated by DSSP."
     )
 

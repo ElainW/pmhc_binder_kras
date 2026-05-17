@@ -89,7 +89,7 @@ def calc_rg(coords):
     return float(rg)
 
 
-def calc_helix_segments(pose, binder_chain="D", min_helix_length=4):
+def calc_helix_segments(pose, binder_chain="D", min_helix_length=7):
     """
     Run DSSP on the binder subpose only and return helix metrics.
 
@@ -247,8 +247,8 @@ def parse_args():
         help="Chain letter of the groove-forming MHC chain (default: A)."
     )
     parser.add_argument(
-        "--min_helix_length", type=int, default=4,
-        help="Minimum consecutive helix residues to count as a segment (default: 4)."
+        "--min_helix_length", type=int, default=7,
+        help="Minimum consecutive helix residues to count as a segment (default: 7)."
     )
     parser.add_argument(
         "--pattern", default="*.pdb",
