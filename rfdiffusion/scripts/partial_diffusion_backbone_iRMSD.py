@@ -419,15 +419,11 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     n    = len(labels)
     disp = np.where(np.isinf(mat), np.nan, mat)
 
-    # Replace NaN with a high value for linkage (different-length binders)
-    link_mat = np.where(np.isnan(disp), disp.nanmax() * 1.5
-                        if not np.all(np.isnan(disp)) else 1e6, disp)
-    # seaborn clustermap handles the linkage internally via squareform
+    # NaN entries (inf iRMSD = different binder lengths) are passed as NaN
+    # to the DataFrame; seaborn clustermap replaces them with column means
+    # for linkage purposes, which is acceptable since cross-length pairs
+    # are rare within a single orientation group.
     fs = max(6, n * 0.45 + 2)
-
-    # Build a masked array so NaN cells render as grey
-    import numpy.ma as ma
-    masked = ma.masked_invalid(disp)
 
     cg = sns.clustermap(
         pd.DataFrame(disp, index=short, columns=short),
