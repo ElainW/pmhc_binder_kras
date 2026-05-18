@@ -76,21 +76,26 @@ def _normalise_output_stem(raw_token: str) -> str:
       → lower T0.1    → 'orient_255_pT12__33_sample06_a1_t0.1'
     """
     stem = raw_token.strip()
-    # Remove trailing _T=<value>
-    stem = re.sub(r'_T=[\d.]+$', '', stem)
-    # Lower-case _T<value> → _t<value>
-    stem = re.sub(r'_T([\d.]+)', lambda m: f'_t{m.group(1)}', stem)
+    # Strip _T=<value> anywhere (e.g. _T=0.1, _T=0.15) -- redundant with _t<val>
+    stem = re.sub(r'_T=[\d.]+', '', stem)
+    # Lowercase any remaining trailing _T<value> (old-format: _T0.1 -> _t0.1)
+    stem = re.sub(r'_T([\d.]+)$', lambda m: f'_t{m.group(1)}', stem)
     return stem
 
 
-def _backbone_from_stem(stem: str) -> str:
+def _backbone_from_stem(stem: str, suffix_re=None) -> str:
     """
     Derive backbone PDB stem from the output PDB stem by stripping
-    the _sample\d+_a\d+_t[\d.]+ suffix.
+    the suffix matched by suffix_re (default: _SUFFIX_RE).
 
-    e.g. orient_255_pT12__33_sample06_a1_t0.1 → orient_255_pT12__33
+    Round 2.5 default:  _sample\d+_a\d+_t[\d.]+
+      orient_255_pt12__33_sample06_a1_t0.1 -> orient_255_pt12__33
+
+    Round 3 example:    _a\d+_t[\d.]+
+      orient_252_pt20__31_pt12__0_a3_t0.1  -> orient_252_pt20__31_pt12__0
     """
-    return _SUFFIX_RE.sub('', stem)
+    pattern = suffix_re if suffix_re is not None else _SUFFIX_RE
+    return pattern.sub('', stem)
 
 
 # --- Format detection ---
@@ -99,7 +104,7 @@ def _backbone_from_stem(stem: str) -> str:
 _OLD_DESIGNED_RE = re.compile(r'^>T=[\d.]+')
 
 # New-format header: backbone name embeds _sample\d+_a\d+_[Tt] (before first comma)
-_NEW_FORMAT_RE   = re.compile(r'_sample\d+_a\d+_[Tt][\d.]+', re.IGNORECASE)
+_NEW_FORMAT_RE   = re.compile(r'(_sample\d+)?_a\d+_[Tt][\d.]+', re.IGNORECASE)
 
 
 def _is_new_format_header(raw_header: str) -> bool:
@@ -110,7 +115,7 @@ def _is_new_format_header(raw_header: str) -> bool:
 
 # --- Parsing ---
 
-def parse_mpnn_fasta(fasta_file: str) -> dict:
+def parse_mpnn_fasta(fasta_file: str, suffix_re=None) -> dict:
     """
     Parse a ProteinMPNN output FASTA file. Auto-detects old vs new format.
 
@@ -153,7 +158,7 @@ def parse_mpnn_fasta(fasta_file: str) -> dict:
                     # ── New format ──────────────────────────────────────────
                     raw_token        = line.lstrip('>').split(',')[0]
                     current_stem     = _normalise_output_stem(raw_token)
-                    current_backbone = _backbone_from_stem(current_stem)
+                    current_backbone = _backbone_from_stem(current_stem, suffix_re)
                     sample_match     = re.search(r'\bsample=(\d+)', line)
                     current_sample   = int(sample_match.group(1)) if sample_match else None
                     in_old_native    = False
@@ -189,7 +194,7 @@ def parse_mpnn_fasta(fasta_file: str) -> dict:
     return designs
 
 
-def parse_fasta_directory(fasta_dir: str) -> dict:
+def parse_fasta_directory(fasta_dir: str, suffix_re=None) -> dict:
     """
     Parse all .fa files in a directory and merge into one designs dict.
     """
@@ -202,7 +207,7 @@ def parse_fasta_directory(fasta_dir: str) -> dict:
     print(f"Found {len(fasta_files)} FASTA files in {fasta_dir}")
 
     for fa in fasta_files:
-        designs = parse_mpnn_fasta(fa)
+        designs = parse_mpnn_fasta(fa, suffix_re)
         all_designs.update(designs)
 
     return all_designs
@@ -310,13 +315,17 @@ def verify_threaded_pdb(output_pdb: str, expected_sequence: str) -> bool:
 
 def main(args):
 
+    # Build backbone suffix regex
+    suffix_re = re.compile(args.backbone_suffix_re, re.IGNORECASE) \
+        if args.backbone_suffix_re else None
+
     # Load designs
     if args.fasta_file:
         print(f"Parsing single FASTA file: {args.fasta_file}")
-        all_designs = parse_mpnn_fasta(args.fasta_file)
+        all_designs = parse_mpnn_fasta(args.fasta_file, suffix_re)
     else:
         print(f"Parsing FASTA directory: {args.fasta_dir}")
-        all_designs = parse_fasta_directory(args.fasta_dir)
+        all_designs = parse_fasta_directory(args.fasta_dir, suffix_re)
 
     print(f"Output PDB stems loaded: {len(all_designs)}")
     print(f"Total sequences:         {sum(len(v) for v in all_designs.values())}")
@@ -333,7 +342,7 @@ def main(args):
         # Each entry carries its own backbone name (all should be identical
         # within a stem, but we read it per-entry for safety)
         for design in sequences:
-            backbone_name = design['backbone'].replace("pt", "pT")
+            backbone_name = design['backbone']
             backbone_pdb  = os.path.join(args.backbone_dir,
                                          f"{backbone_name}.pdb")
 
@@ -343,9 +352,10 @@ def main(args):
                 skipped += 1
                 continue
 
-            out_name = (f"{output_stem}_s{design['sample']}.pdb"
+            out_stem = output_stem.replace('pT', 'pt')
+            out_name = (f"{out_stem}_s{design['sample']}.pdb"
                         if design['sample'] is not None
-                        else f"{output_stem}.pdb")
+                        else f"{out_stem}.pdb")
             out_path = os.path.join(args.output_dir, out_name)
 
             try:
@@ -398,15 +408,15 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python thread_mpnn_to_backbone.py \
-      --fasta_dir outputs/kras_r25/seqs/ \
-      --backbone_dir rfdiffusion/outputs/rep/ \
+  python thread_mpnn_to_backbone.py \\
+      --fasta_dir outputs/kras_r25/seqs/ \\
+      --backbone_dir rfdiffusion/outputs/rep/ \\
       --output_dir threaded_pdbs/
 
-  python thread_mpnn_to_backbone.py \
-      --fasta_file outputs/all_seqs.fa \
-      --backbone_dir rfdiffusion/outputs/rep/ \
-      --output_dir threaded_pdbs/ \
+  python thread_mpnn_to_backbone.py \\
+      --fasta_file outputs/all_seqs.fa \\
+      --backbone_dir rfdiffusion/outputs/rep/ \\
+      --output_dir threaded_pdbs/ \\
       --verify --verbose
         """
     )
@@ -428,6 +438,15 @@ Examples:
                         help='Verify each threaded PDB by reading back chain A')
     parser.add_argument('--verbose', action='store_true',
                         help='Print one line per threaded PDB')
+    parser.add_argument(
+        '--backbone_suffix_re', type=str, default=None,
+        help=(
+            'Regex to strip from the normalised FASTA stem to recover the '
+            'backbone filename (without .pdb). '
+            'Round 2.5 default: r"_sample\\d+_a\\d+_t[\\d.]+$" '
+            'Round 3 example:   r"_a\\d+_t[\\d.]+$"'
+        )
+    )
 
     return parser.parse_args()
 
