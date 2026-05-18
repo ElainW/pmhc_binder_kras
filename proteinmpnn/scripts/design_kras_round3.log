@@ -1,0 +1,13 @@
+[WARN] 2 empty TSV(s) skipped (0 sequences passed filters):
+  orient_255_pT12__18_pT12__37.tsv
+  orient_255_pT12__2_pT12__77.tsv
+
+============================================================
+  Merged 349 per-design files
+  Backbones:                347
+  Total sequences:          2701
+  Backbones with full 8: 329/347
+  Net charge -- mean=-5.7  min=-16.0  max=-3.0
+  Combined FASTA: /n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/kras_r3/all_sequences.fa
+  Log TSV:        /n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/kras_r3/mpnn_redesign_log.tsv
+============================================================
