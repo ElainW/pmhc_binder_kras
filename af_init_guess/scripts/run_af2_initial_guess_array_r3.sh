@@ -42,12 +42,12 @@ fi
 
 # --- Paths ---
 DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-CHUNK_DIR="/n/groups/marks/users/aaron/pmhc_cp/af_init_guess/inputs/r3/"
+CHUNK_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r3/kras_chunks"
 OUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r3/af2_kras"
 
 # --- Per-job inputs/outputs based on array index ---
-SILENT_IN="${CHUNK_DIR}/threaded_kras_designs.silent"
-SILENT_OUT="${OUT_DIR}/af2_kras_predictions.silent"
+SILENT_IN="${CHUNK_DIR}/chunk_${SLURM_ARRAY_TASK_ID}.silent"
+SILENT_OUT="${OUT_DIR}/af2_kras_predictions_${SLURM_ARRAY_TASK_ID}.silent"
 SCOREFILEPATH="${OUT_DIR}/kras_scores_${SLURM_ARRAY_TASK_ID}.sc"
 PAE_DIR="${OUT_DIR}/pae"
 
@@ -61,6 +61,8 @@ if [ ! -f "${SILENT_IN}" ]; then
 fi
 
 echo "======================================================"
+echo "SLURM job:     ${SLURM_JOB_ID}"
+echo "Array task:    ${SLURM_ARRAY_TASK_ID}"
 echo "Node:          $(hostname)"
 echo "GPU:           $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 echo "Input:         ${SILENT_IN}"
