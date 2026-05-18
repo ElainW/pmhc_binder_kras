@@ -27,7 +27,7 @@ Strategy:
      given iRMSD cutoff.
   5. For each cluster, keep the medoid — backbone with lowest mean iRMSD
      to all others in the cluster.
-  6. Copy all filtered structures from surviving backbones to output_dir.
+  6. Symlink surviving backbone PDBs into output_dir (no data duplication).
 
 Visualizations:
   --visualize_orientations
@@ -40,9 +40,10 @@ Visualizations:
 
   --superpose_orientations
       For each orientation group, superpose all backbones onto the group
-      medoid (lowest mean intra-group iRMSD) and write a multi-model PDB
-      to output_dir/orientation_superposed/.  Only binder chain A is
-      written; superposition is computed on interface Cα atoms.
+      medoid and write ONE PDB per backbone to
+      output_dir/orientation_superposed/<orientation_id>/.
+      Each file can be opened independently in PyMOL or ChimeraX.
+      Load all at once: `load /path/to/orient_*/`
 
 Usage
 -----
@@ -59,7 +60,6 @@ python partial_diffusion_backbone_iRMSD.py \
 
 import os
 import re
-import shutil
 import argparse
 import glob
 from collections import defaultdict
@@ -396,27 +396,63 @@ def _short(labels, orientation_id):
             for l in labels]
 
 
-def plot_irmsd_heatmap(mat, labels, orientation_id, output_dir):
-    """Save intra-orientation pairwise iRMSD heatmap."""
+def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
+                          medoid_id=None):
+    """
+    Save an intra-orientation iRMSD clustermap: hierarchical clustering
+    dendrogram on both axes + colour-coded RMSD matrix.
+
+    The dendrogram shows how backbones group by interface similarity.
+    Cells are annotated with the RMSD value when n <= 25.
+    The medoid column/row label is marked with *.
+    inf values (different binder lengths) are shown in grey.
+    """
+    from scipy.cluster.hierarchy import dendrogram
     os.makedirs(output_dir, exist_ok=True)
-    short   = _short(labels, orientation_id)
-    n       = len(labels)
-    fs      = max(4, n * 0.5 + 1)
-    fig, ax = plt.subplots(figsize=(fs, fs * 0.85))
-    disp    = np.where(np.isinf(mat), np.nan, mat)
-    sns.heatmap(disp, xticklabels=short, yticklabels=short,
-                annot=(n <= 20), fmt=".2f", cmap="YlOrRd",
-                linewidths=0.3, ax=ax, vmin=0,
-                cbar_kws={"label": "interface Cα RMSD (Å)"})
-    ax.set_title(f"{orientation_id}\nintra-group pairwise iRMSD", fontsize=9)
-    ax.tick_params(axis="x", rotation=45, labelsize=7)
-    ax.tick_params(axis="y", rotation=0,  labelsize=7)
-    plt.tight_layout()
+
+    short = _short(labels, orientation_id)
+    # Mark medoid
+    if medoid_id and medoid_id in labels:
+        mi = labels.index(medoid_id)
+        short[mi] = f"* {short[mi]}"
+
+    n    = len(labels)
+    disp = np.where(np.isinf(mat), np.nan, mat)
+
+    # Replace NaN with a high value for linkage (different-length binders)
+    link_mat = np.where(np.isnan(disp), disp.nanmax() * 1.5
+                        if not np.all(np.isnan(disp)) else 1e6, disp)
+    # seaborn clustermap handles the linkage internally via squareform
+    fs = max(6, n * 0.45 + 2)
+
+    # Build a masked array so NaN cells render as grey
+    import numpy.ma as ma
+    masked = ma.masked_invalid(disp)
+
+    cg = sns.clustermap(
+        pd.DataFrame(disp, index=short, columns=short),
+        method="average",
+        metric="euclidean",
+        cmap="YlOrRd",
+        vmin=0,
+        annot=(n <= 25),
+        fmt=".2f",
+        linewidths=0.3 if n <= 50 else 0,
+        figsize=(fs, fs),
+        cbar_kws={"label": "interface Cα RMSD (Å)", "shrink": 0.5},
+        na_col="lightgrey",
+    )
+    cg.ax_heatmap.tick_params(axis="x", rotation=90, labelsize=max(5, 9 - n // 15))
+    cg.ax_heatmap.tick_params(axis="y", rotation=0,  labelsize=max(5, 9 - n // 15))
+    cg.figure.suptitle(
+        f"{orientation_id}\nintra-group iRMSD  (* = medoid)",
+        fontsize=9, y=1.01,
+    )
     safe = orientation_id.replace("/", "_")
-    path = os.path.join(output_dir, f"{safe}_irmsd_heatmap.png")
-    fig.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"    iRMSD heatmap: {path}")
+    path = os.path.join(output_dir, f"{safe}_irmsd_clustermap.png")
+    cg.figure.savefig(path, dpi=150, bbox_inches="tight")
+    plt.close(cg.figure)
+    print(f"    iRMSD clustermap: {path}")
 
 
 def plot_contact_distance_heatmap(labels, pep_ca_res_by_id, binder_ca_by_id,
@@ -484,48 +520,55 @@ def plot_contact_distance_heatmap(labels, pep_ca_res_by_id, binder_ca_by_id,
 
 # ── Multi-model superposed PDB ────────────────────────────────────────────────
 
-def write_superposed_multimodel_pdb(backbone_ids, backbone_to_pdb,
-                                    medoid_id, binder_ca_by_id,
-                                    orientation_id, output_dir,
-                                    binder_chain="A"):
+def write_superposed_individual_pdbs(backbone_ids, backbone_to_pdb,
+                                      medoid_id, binder_ca_by_id,
+                                      orientation_id, output_dir,
+                                      binder_chain="A"):
     """
-    Superpose all backbones in the group onto the medoid using all binder Cα,
-    then write a multi-model PDB (binder chain only).
-    Medoid is MODEL 1; REMARK records backbone ID and iRMSD to medoid.
+    Superpose all backbones in the group onto the medoid (binder Cα),
+    then write one PDB per backbone into output_dir/<orientation_id>/.
+
+    Each file is named <backbone_id>_superposed.pdb and contains only the
+    binder chain (chain A), so every model can be opened independently in
+    PyMOL / ChimeraX.  Load the whole directory at once to compare all models:
+
+        PyMOL:   load /path/to/orient_252_pT20__31/*.pdb
+        ChimeraX: open /path/to/orient_252_pT20__31/*.pdb
     """
-    os.makedirs(output_dir, exist_ok=True)
+    safe      = orientation_id.replace("/", "_")
+    model_dir = os.path.join(output_dir, safe)
+    os.makedirs(model_dir, exist_ok=True)
+
     ref_ca = binder_ca_by_id.get(medoid_id)
     if ref_ca is None:
         print(f"  [WARN] Medoid {medoid_id} has no coords — skipping")
         return
 
+    ref_centre = ref_ca.mean(axis=0)
     ordered    = [medoid_id] + sorted(bb for bb in backbone_ids
                                       if bb != medoid_id)
-    ref_centre = ref_ca.mean(axis=0)
-    safe       = orientation_id.replace("/", "_")
-    out_path   = os.path.join(output_dir, f"{safe}_superposed.pdb")
+    written    = 0
+    for bb in ordered:
+        mobile_ca = binder_ca_by_id.get(bb)
+        if mobile_ca is None:
+            continue
 
-    with open(out_path, "w") as fh:
-        fh.write(f"REMARK  Orientation: {orientation_id}\n")
-        fh.write(f"REMARK  Medoid (MODEL 1): {medoid_id}\n")
-        fh.write(f"REMARK  {len(ordered)} models superposed on medoid binder Ca\n")
+        if bb == medoid_id:
+            irmsd_val, transform = 0.0, None
+        else:
+            irmsd_val     = calc_rmsd_aligned(ref_ca, mobile_ca)
+            mobile_centre = mobile_ca.mean(axis=0)
+            R             = kabsch_rotation(ref_ca    - ref_centre,
+                                            mobile_ca - mobile_centre)
+            transform = (mobile_centre, ref_centre, R)
 
-        for model_num, bb in enumerate(ordered, start=1):
-            mobile_ca = binder_ca_by_id.get(bb)
-            if mobile_ca is None:
-                continue
-
-            if bb == medoid_id:
-                irmsd_val, transform = 0.0, None
-            else:
-                irmsd_val     = calc_rmsd_aligned(ref_ca, mobile_ca)
-                mobile_centre = mobile_ca.mean(axis=0)
-                R             = kabsch_rotation(ref_ca     - ref_centre,
-                                                mobile_ca  - mobile_centre)
-                transform = (mobile_centre, ref_centre, R)
-
-            fh.write(f"MODEL     {model_num:4d}\n")
-            fh.write(f"REMARK  backbone={bb}  iRMSD_to_medoid={irmsd_val:.3f}\n")
+        out_path = os.path.join(model_dir, f"{bb}_superposed.pdb")
+        with open(out_path, "w") as fh:
+            fh.write(f"REMARK  Orientation: {orientation_id}\n")
+            fh.write(f"REMARK  Backbone: {bb}\n")
+            fh.write(f"REMARK  Medoid: {medoid_id}\n")
+            fh.write(f"REMARK  iRMSD_to_medoid: {irmsd_val:.3f}\n")
+            fh.write(f"REMARK  is_medoid: {'yes' if bb == medoid_id else 'no'}\n")
 
             for serial, atom in enumerate(
                     get_full_chain_atoms(backbone_to_pdb[bb], binder_chain),
@@ -542,11 +585,10 @@ def write_superposed_multimodel_pdb(backbone_ids, backbone_to_pdb,
                     f"{x:8.3f}{y:8.3f}{z:8.3f}"
                     f"  1.00  0.00           {name[0]:>2s}\n"
                 )
-            fh.write("ENDMDL\n")
+            fh.write("END\n")
+        written += 1
 
-        fh.write("END\n")
-
-    print(f"    Superposed PDB: {out_path}  ({len(ordered)} models)")
+    print(f"    Superposed PDBs: {model_dir}/  ({written} files)")
 
 
 # ── Clustering ────────────────────────────────────────────────────────────────
@@ -649,15 +691,16 @@ def run(input_dirs, output_dir, binder_chain="A",
 
         if not dry_run:
             if visualize_orientations:
-                plot_irmsd_heatmap(
-                    sub_mat, sub_labels, oid, heatmap_dir
+                plot_irmsd_clustermap(
+                    sub_mat, sub_labels, oid, heatmap_dir,
+                    medoid_id=medoid
                 )
                 plot_contact_distance_heatmap(
                     sub_labels, pep_ca_res_by_id, binder_ca_by_id,
                     oid, heatmap_dir, medoid_id=medoid
                 )
             if superpose_orientations:
-                write_superposed_multimodel_pdb(
+                write_superposed_individual_pdbs(
                     bb_ids, backbone_to_pdb, medoid,
                     binder_ca_by_id, oid, superpose_dir, binder_chain
                 )
@@ -688,16 +731,20 @@ def run(input_dirs, output_dir, binder_chain="A",
 
     print(f"\n{n_clusters} surviving backbones")
 
-    # copy structures (1 PDB per surviving backbone)
+    # symlink surviving backbones into output_dir (1 PDB per backbone)
     if dry_run:
         print("\n[DRY RUN] No files written.")
     else:
         os.makedirs(output_dir, exist_ok=True)
+        n_linked = 0
         for bb in surviving_backbones:
-            shutil.copy2(backbone_to_pdb[bb],
-                         os.path.join(output_dir,
-                                      os.path.basename(backbone_to_pdb[bb])))
-        print(f"Copied {len(surviving_backbones)} structures → {output_dir}")
+            src = os.path.abspath(backbone_to_pdb[bb])
+            dst = os.path.join(output_dir, os.path.basename(src))
+            if os.path.islink(dst) or os.path.exists(dst):
+                os.remove(dst)
+            os.symlink(src, dst)
+            n_linked += 1
+        print(f"Symlinked {n_linked} structures → {output_dir}")
 
     # CSV log
     rows = []
