@@ -11,15 +11,16 @@ DESIGN_LIST="${OUTPUT_DIR}/design_list.txt"
 
 # Step 1 — write list, get chunk count
 N=$(python ${SCRIPT} --pdb_dir ${PDB_DIR} --out_dir ${OUTPUT_DIR} \
-    --mpnn_path ${MPNN_ENV} --mpnn_script ${MPNN_SCRIPT} \
+    --mpnn_path ${MPNN_ENV} --mpnn_script ${PROTEINMPNN_SCRIPT_DIR}/protein_mpnn_run.py \
     --chunk_size 50 --write_design_list | tail -1)
 echo "Submitting array 0-$((N-1))"   # expect: 0-6 for 349 PDBs
 cat ${DESIGN_LIST}                    # verify paths look correct
+wc -l ${DESIGN_LIST}
 # → prints: chunk_size=50  n_chunks=7  array=0-6
 #            7
 
 # Step 2 — submit
-sbatch --array=0-$((N-1)) run_mpnn_array_r3.sh
+sbatch --array=0-$((N-1)) design_kras_round3_array.sh
 
 # Step 3 -- check progress / resubmit failures:
 #

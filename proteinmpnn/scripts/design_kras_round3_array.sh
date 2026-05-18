@@ -12,7 +12,7 @@
 PYTHON_ENV="/n/groups/marks/users/aaron/pmhc_cp/envs/dl_binder_design/bin/python"
 MPNN_ENV="/n/groups/marks/users/aaron/pmhc_cp/envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-SCRIPT="/n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/scripts/redesign_w_charge_residue_filter.py"
+SCRIPT="/n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/scripts/redesign_w_charge_residue_filter_parallel.py"
 
 PDB_DIR="/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
 OUTPUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/kras_r3"
