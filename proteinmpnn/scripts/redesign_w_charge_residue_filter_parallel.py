@@ -22,30 +22,30 @@ directory (or on sys.path).
 
 Usage -- write design list and get chunk count:
 
-    N=$(python redesign_w_charge_residue_filter_parallel.py \\
-        --pdb_dir  /path/to/pdbs \\
-        --out_dir  /path/to/outputs \\
-        --mpnn_path ... --mpnn_script ... \\
+    N=$(python redesign_w_charge_residue_filter_parallel.py \
+        --pdb_dir  /path/to/pdbs \
+        --out_dir  /path/to/outputs \
+        --mpnn_path ... --mpnn_script ... \
         --chunk_size 50 --write_design_list | tail -1)
     # prints: chunk_size=50  n_chunks=7  array=0-6
     #         7
 
 Usage -- SLURM array (in batch script):
 
-    python redesign_w_charge_residue_filter_parallel.py \\
-        --pdb_dir     /path/to/pdbs \\
-        --out_dir     /path/to/outputs \\
-        --mpnn_path   ... --mpnn_script ... \\
-        --design_list /path/to/outputs/design_list.txt \\
-        --design_idx  $SLURM_ARRAY_TASK_ID \\
+    python redesign_w_charge_residue_filter_parallel.py \
+        --pdb_dir     /path/to/pdbs \
+        --out_dir     /path/to/outputs \
+        --mpnn_path   ... --mpnn_script ... \
+        --design_list /path/to/outputs/design_list.txt \
+        --design_idx  $SLURM_ARRAY_TASK_ID \
         --chunk_size  50
 
 Usage -- merge after all tasks complete:
 
-    python redesign_w_charge_residue_filter_parallel.py \\
-        --pdb_dir  /path/to/pdbs \\
-        --out_dir  /path/to/outputs \\
-        --mpnn_path ... --mpnn_script ... \\
+    python redesign_w_charge_residue_filter_parallel.py \
+        --pdb_dir  /path/to/pdbs \
+        --out_dir  /path/to/outputs \
+        --mpnn_path ... --mpnn_script ... \
         --merge
 """
 
@@ -98,7 +98,11 @@ def per_design_paths(out_dir: str, stem: str):
 
 def write_per_design(out_dir, stem, collected, reasons_str,
                      surface_hyd_resnums, pdb_path):
-    """Write per-design FASTA and TSV for one backbone."""
+    """Write per-design FASTA and TSV for one backbone.
+    If collected is empty, skips writing so merge does not see empty files."""
+    if not collected:
+        print(f"    [WARN] {stem}: no sequences collected, skipping output files")
+        return []
     fa_path, tsv_path = per_design_paths(out_dir, stem)
     rows = []
     with open(fa_path, 'w') as fa:
@@ -138,8 +142,27 @@ def merge_outputs(out_dir: str, n_seqs: int):
         print(f"[WARN] No per-design TSV files found in {per_dir}")
         return
 
-    log      = pd.concat([pd.read_csv(f, sep='\t') for f in tsv_files],
-                         ignore_index=True)
+    dfs, empty = [], []
+    for f in tsv_files:
+        try:
+            df = pd.read_csv(f, sep='\t')
+            if df.empty:
+                empty.append(f)
+            else:
+                dfs.append(df)
+        except pd.errors.EmptyDataError:
+            empty.append(f)
+
+    if empty:
+        print(f"[WARN] {len(empty)} empty TSV(s) skipped (0 sequences passed filters):")
+        for f in empty:
+            print(f"  {os.path.basename(f)}")
+
+    if not dfs:
+        print("[WARN] All TSV files were empty -- nothing to merge.")
+        return
+
+    log = pd.concat(dfs, ignore_index=True)
     log_path = os.path.join(out_dir, 'mpnn_redesign_log.tsv')
     log.to_csv(log_path, sep='\t', index=False)
 
