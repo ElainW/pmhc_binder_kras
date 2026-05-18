@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --mem=10G
 #SBATCH -c 4
-#SBATCH -o /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.log
-#SBATCH -e /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.err
+#SBATCH -o ../logs/af2_ig_kras_%a.log
+#SBATCH -e ../logs/af2_ig_kras_%a.err
 
 # -------------------------------------------------------
 # AF2 Initial Guess — SLURM array job (KRAS)
@@ -36,6 +36,7 @@ if not any('cuda' in str(d).lower() for d in devices):
 
 if [ $? -ne 0 ]; then
     echo "ERROR: GPU not visible to JAX — check CUDA/cuDNN setup"
+    echo "Node: $(hostname)"
     exit 1
 fi
 
@@ -47,7 +48,7 @@ OUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r3/af2_kras"
 # --- Per-job inputs/outputs based on array index ---
 SILENT_IN="${CHUNK_DIR}/threaded_kras_designs.silent"
 SILENT_OUT="${OUT_DIR}/af2_kras_predictions.silent"
-SCOREFILEPATH="${OUT_DIR}/kras_scores.sc"
+SCOREFILEPATH="${OUT_DIR}/kras_scores_${SLURM_ARRAY_TASK_ID}.sc"
 PAE_DIR="${OUT_DIR}/pae"
 
 # --- Setup ---
