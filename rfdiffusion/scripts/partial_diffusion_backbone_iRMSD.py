@@ -72,7 +72,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import PDB
 from scipy.spatial.distance import squareform
-from scipy.cluster.hierarchy import linkage, fcluster
+from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
 
 
 # ── PDB parsing ───────────────────────────────────────────────────────────────
@@ -407,7 +407,6 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     The medoid column/row label is marked with *.
     inf values (different binder lengths) are shown in grey.
     """
-    from scipy.cluster.hierarchy import dendrogram
     os.makedirs(output_dir, exist_ok=True)
 
     short = _short(labels, orientation_id)
@@ -429,13 +428,10 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     # doesn't try to re-run linkage on the square matrix (which triggers
     # ClusterWarning).  NaN entries (inf iRMSD pairs) are filled with the
     # max finite value before condensing — they will cluster last.
-    from scipy.spatial.distance import squareform as _squareform
-    from scipy.cluster.hierarchy import linkage as _linkage
-
     fill_val = float(np.nanmax(disp)) if not np.all(np.isnan(disp)) else 1e6
     disp_filled = np.where(np.isnan(disp), fill_val, disp)
-    condensed   = _squareform(disp_filled, checks=False)
-    Z           = _linkage(condensed, method="average")
+    condensed   = squareform(disp_filled, checks=False)
+    Z           = linkage(condensed, method="average")
 
     df = pd.DataFrame(disp, index=short, columns=short)
 
