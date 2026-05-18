@@ -399,18 +399,16 @@ def _short(labels, orientation_id):
 def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
                           medoid_id=None):
     """
-    Save an intra-orientation iRMSD clustermap: hierarchical clustering
-    dendrogram on both axes + colour-coded RMSD matrix.
+    Save an iRMSD dendrogram for an orientation group.
 
-    The dendrogram shows how backbones group by interface similarity.
-    Cells are annotated with the RMSD value when n <= 25.
-    The medoid column/row label is marked with *.
-    inf values (different binder lengths) are shown in grey.
+    Only the dendrogram is shown — no heatmap.  Horizontal dashed lines
+    mark iRMSD cutoff values (0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0 Å) so
+    you can visually read off how many clusters each cutoff would produce.
+    Leaf labels are shortened backbone IDs; the medoid is marked with *.
     """
     os.makedirs(output_dir, exist_ok=True)
 
     short = _short(labels, orientation_id)
-    # Mark medoid
     if medoid_id and medoid_id in labels:
         mi = labels.index(medoid_id)
         short[mi] = f"* {short[mi]}"
@@ -418,57 +416,56 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     n    = len(labels)
     disp = np.where(np.isinf(mat), np.nan, mat)
 
-    # NaN entries (inf iRMSD = different binder lengths) are passed as NaN
-    # to the DataFrame; seaborn clustermap replaces them with column means
-    # for linkage purposes, which is acceptable since cross-length pairs
-    # are rare within a single orientation group.
-    fs = max(6, n * 0.45 + 2)
-
-    # Pre-compute linkage from the condensed distance matrix so seaborn
-    # doesn't try to re-run linkage on the square matrix (which triggers
-    # ClusterWarning).  NaN entries (inf iRMSD pairs) are filled with the
-    # max finite value before condensing — they will cluster last.
-    fill_val = float(np.nanmax(disp)) if not np.all(np.isnan(disp)) else 1e6
+    # Build linkage — fill NaN (inf pairs) with max finite value so they
+    # cluster last and don't break the condensed distance computation
+    fill_val    = float(np.nanmax(disp)) if not np.all(np.isnan(disp)) else 1e6
     disp_filled = np.where(np.isnan(disp), fill_val, disp)
     condensed   = squareform(disp_filled, checks=False)
     Z           = linkage(condensed, method="average")
 
-    df = pd.DataFrame(disp, index=short, columns=short)
+    # Figure: wide enough for leaf labels, tall enough for cutoff lines
+    fig_w = max(8, n * 0.18 + 2)
+    fig_h = 4
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-    cg = sns.clustermap(
-        df,
-        row_linkage=Z,
-        col_linkage=Z,
-        cmap="YlOrRd",
-        vmin=0,
-        annot=(n <= 25),
-        fmt=".2f",
-        linewidths=0.3 if n <= 50 else 0,
-        figsize=(fs, fs),
-        cbar_kws={"label": "interface Cα RMSD (Å)", "shrink": 0.5},
+    dendrogram(
+        Z,
+        labels=short,
+        ax=ax,
+        leaf_rotation=90,
+        leaf_font_size=max(4, 8 - n // 20),
+        color_threshold=0,          # all branches grey — colour conveys nothing here
+        above_threshold_color="#888888",
     )
-    # Grey out NaN cells (inf pairs) after rendering
-    heatmap_ax = cg.ax_heatmap
-    reorder    = cg.dendrogram_row.reordered_ind
-    disp_ro    = disp[np.ix_(reorder, reorder)]
-    for i in range(n):
-        for j in range(n):
-            if np.isnan(disp_ro[i, j]):
-                heatmap_ax.add_patch(
-                    plt.Rectangle((j, i), 1, 1,
-                                  fill=True, color="lightgrey", zorder=3)
-                )
-    cg.ax_heatmap.tick_params(axis="x", rotation=90, labelsize=max(5, 9 - n // 15))
-    cg.ax_heatmap.tick_params(axis="y", rotation=0,  labelsize=max(5, 9 - n // 15))
-    cg.figure.suptitle(
-        f"{orientation_id}\nintra-group iRMSD  (* = medoid)",
-        fontsize=9, y=1.01,
+
+    # Cutoff reference lines
+    cutoffs = [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]
+    colors  = ["#2ecc71", "#27ae60", "#f39c12", "#e67e22",
+               "#e74c3c", "#c0392b", "#8e44ad"]
+    ymax    = ax.get_ylim()[1]
+    xmax    = ax.get_xlim()[1]
+    for cutoff, color in zip(cutoffs, colors):
+        if cutoff <= ymax:
+            ax.axhline(y=cutoff, color=color, linewidth=1.2,
+                       linestyle="--", alpha=0.9, zorder=5)
+            ax.text(xmax * 0.99, cutoff, f" {cutoff} Å",
+                    va="bottom", ha="right",
+                    fontsize=7, color=color, fontweight="bold", zorder=6)
+
+    ax.set_ylabel("iRMSD (Å)", fontsize=9)
+    ax.set_title(
+        f"{orientation_id}  ({n} backbones)\niRMSD dendrogram  (* = medoid, average linkage)",
+        fontsize=9,
     )
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    plt.tight_layout()
     safe = orientation_id.replace("/", "_")
-    path = os.path.join(output_dir, f"{safe}_irmsd_clustermap.png")
-    cg.figure.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(cg.figure)
-    print(f"    iRMSD clustermap: {path}")
+    out_path = os.path.join(output_dir, f"{safe}_irmsd_clustermap.png")
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"    iRMSD dendrogram: {out_path}")
 
 
 def plot_contact_distance_heatmap(labels, pep_ca_res_by_id, binder_ca_by_id,
