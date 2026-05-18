@@ -35,4 +35,4 @@ sacct -j <JOBID> --format=JobID,State,ExitCode | grep -v COMPLETED
 
 # Step 4 — merge
 python ${SCRIPT} --pdb_dir ${PDB_DIR} --out_dir ${OUTPUT_DIR} \
-    --mpnn_path ${MPNN_ENV} --mpnn_script ${MPNN_SCRIPT} --merge
+    --mpnn_path ${MPNN_ENV} --mpnn_script ${PROTEINMPNN_SCRIPT_DIR}/protein_mpnn_run.py --merge
