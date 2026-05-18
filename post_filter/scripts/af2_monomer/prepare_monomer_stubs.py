@@ -68,12 +68,10 @@ def main():
         idx.write('array_idx\tdesign\tsequence\tstub_dir\n')
         for i, (header, seq) in enumerate(records):
             name     = header.removesuffix('_af2pred')
-            stub_dir = os.path.join(args.out_dir, name)
-            os.makedirs(stub_dir, exist_ok=True)
-            stub_pdb = os.path.join(stub_dir, f'{name}.pdb')
+            stub_pdb = os.path.join(args.out_dir, f'{name}.pdb')
             with open(stub_pdb, 'w') as f:
                 f.write(_GLY_PDB)
-            idx.write(f'{i}\t{name}\t{seq}\t{stub_dir}\n')
+            idx.write(f'{i}\t{name}\t{seq}\t{stub_pdb}\n')
 
     print(f"Written {len(records)} stub PDBs → {args.out_dir}")
     print(f"Design index → {index_path}")
