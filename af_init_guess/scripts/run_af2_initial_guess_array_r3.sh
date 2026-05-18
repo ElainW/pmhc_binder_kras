@@ -1,3 +1,21 @@
+#!/bin/bash
+#SBATCH -J af2_ig_kras
+#SBATCH -p gpu_quad,gpu
+#SBATCH --qos=gpuquad_qos
+#SBATCH -t 00:45:00
+#SBATCH --gres=gpu:l40s:1
+#SBATCH --mem=10G
+#SBATCH -c 4
+#SBATCH -o /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.log
+#SBATCH -e /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.err
+
+# -------------------------------------------------------
+# AF2 Initial Guess — SLURM array job (KRAS)
+# Submit with:
+#   sbatch --array=0-N run_af2_initial_guess_array.sh
+# where N = (total_chunks - 1) printed by split_silent.py
+# -------------------------------------------------------
+
 # --- Environment ---
 module load conda/miniforge3/24.11.3-0
 conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design
