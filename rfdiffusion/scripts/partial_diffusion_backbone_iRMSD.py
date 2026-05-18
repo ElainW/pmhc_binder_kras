@@ -425,10 +425,24 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     # are rare within a single orientation group.
     fs = max(6, n * 0.45 + 2)
 
+    # Pre-compute linkage from the condensed distance matrix so seaborn
+    # doesn't try to re-run linkage on the square matrix (which triggers
+    # ClusterWarning).  NaN entries (inf iRMSD pairs) are filled with the
+    # max finite value before condensing — they will cluster last.
+    from scipy.spatial.distance import squareform as _squareform
+    from scipy.cluster.hierarchy import linkage as _linkage
+
+    fill_val = float(np.nanmax(disp)) if not np.all(np.isnan(disp)) else 1e6
+    disp_filled = np.where(np.isnan(disp), fill_val, disp)
+    condensed   = _squareform(disp_filled, checks=False)
+    Z           = _linkage(condensed, method="average")
+
+    df = pd.DataFrame(disp, index=short, columns=short)
+
     cg = sns.clustermap(
-        pd.DataFrame(disp, index=short, columns=short),
-        method="average",
-        metric="euclidean",
+        df,
+        row_linkage=Z,
+        col_linkage=Z,
         cmap="YlOrRd",
         vmin=0,
         annot=(n <= 25),
@@ -436,8 +450,18 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
         linewidths=0.3 if n <= 50 else 0,
         figsize=(fs, fs),
         cbar_kws={"label": "interface Cα RMSD (Å)", "shrink": 0.5},
-        na_col="lightgrey",
     )
+    # Grey out NaN cells (inf pairs) after rendering
+    heatmap_ax = cg.ax_heatmap
+    reorder    = cg.dendrogram_row.reordered_ind
+    disp_ro    = disp[np.ix_(reorder, reorder)]
+    for i in range(n):
+        for j in range(n):
+            if np.isnan(disp_ro[i, j]):
+                heatmap_ax.add_patch(
+                    plt.Rectangle((j, i), 1, 1,
+                                  fill=True, color="lightgrey", zorder=3)
+                )
     cg.ax_heatmap.tick_params(axis="x", rotation=90, labelsize=max(5, 9 - n // 15))
     cg.ax_heatmap.tick_params(axis="y", rotation=0,  labelsize=max(5, 9 - n // 15))
     cg.figure.suptitle(
