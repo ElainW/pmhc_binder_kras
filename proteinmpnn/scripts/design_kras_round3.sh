@@ -1,15 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=proteinmpnn_r3
-#SBATCH --partition=gpu_quad,gpu
-#SBATCH --qos=gpuquad_qos
+#SBATCH --partition=priority
 #SBATCH --time=4:00:00
 #SBATCH --mem=3G
-#SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
-#SBATCH --mail-type=TIME_LIMIT_80,TIME_LIMIT,FAIL,ARRAY_TASKS
-#SBATCH --mail-user=wangyilan0304@gmail.com
-#SBATCH --output=../slurm/kras_r2.out
-#SBATCH --error=../slurm/kras_r2.err
+#SBATCH --output=../slurm/kras_r3.out
+#SBATCH --error=../slurm/kras_r3.err
 
 # source activate mlfold
 PYTHON="/n/groups/marks/users/aaron/pmhc_cp/envs/proteinmpnn/bin/python"
