@@ -36,7 +36,7 @@ python r2_filter_backbones.py \
 python partial_diffusion_backbone_iRMSD.py \
     --input_dirs /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/tier1_filtered /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/tier2_filtered \
     --output_dir /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered \
-    --irmsd_cutoff 0.5 \
+    --irmsd_cutoff 0.25 \
     --contact_cutoff 8.0 \
     --visualize_orientations \
     --superpose_orientations
