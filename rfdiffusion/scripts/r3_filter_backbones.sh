@@ -33,10 +33,10 @@ python r2_filter_backbones.py \
     --required_peptide_positions 4 5 6 7 \
     --log_file /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/tier2_filter_log_4567.csv
 
-python partial_diffusion_backbone_RMSD.py \
+python partial_diffusion_backbone_iRMSD.py \
     --input_dirs /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/tier1_filtered /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/tier2_filtered \
     --output_dir /n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered \
-    --rmsd_cutoff 2.0 \
+    --irmsd_cutoff 0.5 \
+    --contact_cutoff 8.0 \
     --visualize_orientations \
-    --superpose_orientations \
-    --dry_run
+    --superpose_orientations
