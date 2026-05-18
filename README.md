@@ -11,7 +11,7 @@ The following is cloned from github:
 
 ## Main innovations:
 - Geometric filter of the backbones (ROG, secondary structures: only >=2 alpha helices, angle between the principle axis of the mini binder and the pMHC complex, CoM, proximity to the neoantigen peptide residue)
-    - deduplicate similar backbones, fraction of peptide solvent accessible area buried is super high > 0.8
+    - deduplicate similar backbones by iRMSD, fraction of peptide solvent accessible area buried is super high > 0.8
 - ProteinMPNN:
     - remove cysteines
     - only get negatively charged sequences
