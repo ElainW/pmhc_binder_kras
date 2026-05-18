@@ -155,15 +155,6 @@ def parse_fasta(fasta_path: str) -> list[dict]:
 # cif_to_pdb is defined locally -- fastrelax_designs_af3.py uses load_cif()
 # which returns a PyRosetta Pose; we need a plain PDB file for protein_mpnn_run.py.
 
-try:
-    from fastrelax_designs_af3 import find_model_cif
-except ImportError as _e:
-    raise ImportError(
-        "fastrelax_designs_af3.py must be on sys.path. "
-        "Add its directory to PYTHONPATH, e.g.:\n"
-        "  export PYTHONPATH=/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
-    ) from _e
-
 
 def cif_to_pdb(cif_path: str, out_dir: str, stem: str) -> str:
     """
@@ -702,6 +693,14 @@ def main():
     if args.pdb_dir:
         tasks = run_mode_a(args)
     else:
+        try:
+            from fastrelax_designs_af3 import find_model_cif
+        except ImportError as _e:
+            raise ImportError(
+                "fastrelax_designs_af3.py must be on sys.path. "
+                "Add its directory to PYTHONPATH, e.g.:\n"
+                "  export PYTHONPATH=/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
+    ) from _e
         if not args.af3_out_dir:
             raise ValueError('--af3_out_dir is required with --audit_tsv (Mode B)')
         tasks = run_mode_b(args)
