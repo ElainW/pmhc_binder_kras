@@ -435,7 +435,7 @@ def _run_attempts(python_bin: str,
                 if seq in seen_seqs:
                     continue
                 passes, reason = sequence_passes_filters(seq, max_charge)
-                print(seq, passes, reason)
+#                 print(seq, passes, reason)
                 if not passes:
                     continue
                 seen_seqs.add(seq)
