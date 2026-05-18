@@ -43,7 +43,6 @@ fi
 DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
 CHUNK_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/kras_chunks"
 OUT_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras"
-LOG_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/r2/logs"
 
 # --- Per-job inputs/outputs based on array index ---
 SILENT_IN="${CHUNK_DIR}/chunk_${SLURM_ARRAY_TASK_ID}.silent"
@@ -52,7 +51,7 @@ SCOREFILEPATH="${OUT_DIR}/kras_scores_${SLURM_ARRAY_TASK_ID}.sc"
 PAE_DIR="${OUT_DIR}/pae"
 
 # --- Setup ---
-mkdir -p ${OUT_DIR} ${LOG_DIR}
+mkdir -p ${OUT_DIR}
 
 # --- Validate input exists ---
 if [ ! -f "${SILENT_IN}" ]; then
