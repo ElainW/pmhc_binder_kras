@@ -23,11 +23,11 @@ Strategy:
      as its own independent backbone. They are NOT pre-collapsed.
   2. Pick one PDB per backbone ID as its representative (first by filename sort).
   3. Compute pairwise iRMSD between all backbone representatives.
-  4. Cluster by iRMSD using hierarchical clustering (average linkage) at a
-     given iRMSD cutoff.
-  5. For each cluster, keep the medoid — backbone with lowest mean iRMSD
-     to all others in the cluster.
-  6. Symlink surviving backbone PDBs into output_dir (no data duplication).
+  4. Cluster WITHIN each orientation group by iRMSD (average linkage).
+     No cross-parent-backbone clustering — avoids interface residue
+     mismatch between trajectories from different parent orientations.
+  5. For each intra-orientation cluster, keep the medoid.
+  6. Symlink surviving cluster medoids into output_dir.
 
 Visualizations:
   --visualize_orientations
@@ -52,7 +52,7 @@ python partial_diffusion_backbone_iRMSD.py \
     --output_dir  /path/to/clustered \
     --peptide_chain C \
     --contact_cutoff 8.0 \
-    --irmsd_cutoff 2.0 \
+    --irmsd_cutoff 0.25 \
     --visualize_orientations \
     --superpose_orientations \
     --dry_run
@@ -72,7 +72,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import PDB
 from scipy.spatial.distance import squareform
-from scipy.cluster.hierarchy import linkage, fcluster, dendrogram
+from scipy.cluster.hierarchy import linkage, fcluster
 
 
 # ── PDB parsing ───────────────────────────────────────────────────────────────
@@ -406,6 +406,8 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     you can visually read off how many clusters each cutoff would produce.
     Leaf labels are shortened backbone IDs; the medoid is marked with *.
     """
+    from scipy.spatial.distance import squareform as _squareform
+    from scipy.cluster.hierarchy import linkage as _linkage, dendrogram as _dendrogram
     os.makedirs(output_dir, exist_ok=True)
 
     short = _short(labels, orientation_id)
@@ -420,15 +422,15 @@ def plot_irmsd_clustermap(mat, labels, orientation_id, output_dir,
     # cluster last and don't break the condensed distance computation
     fill_val    = float(np.nanmax(disp)) if not np.all(np.isnan(disp)) else 1e6
     disp_filled = np.where(np.isnan(disp), fill_val, disp)
-    condensed   = squareform(disp_filled, checks=False)
-    Z           = linkage(condensed, method="average")
+    condensed   = _squareform(disp_filled, checks=False)
+    Z           = _linkage(condensed, method="average")
 
     # Figure: wide enough for leaf labels, tall enough for cutoff lines
     fig_w = max(8, n * 0.18 + 2)
     fig_h = 4
     fig, ax = plt.subplots(figsize=(fig_w, fig_h))
 
-    dendrogram(
+    _dendrogram(
         Z,
         labels=short,
         ax=ax,
@@ -665,16 +667,25 @@ def run(input_dirs, output_dir, binder_chain="A",
         print(f"iRMSD: min={fv.min():.2f}  mean={fv.mean():.2f}  "
               f"max={fv.max():.2f} Å")
 
-    # intra-orientation analysis (always runs)
-    # each orientation groups e.g. orient_252_pT20__31_pT12__0..99 together
-    # without collapsing them — each trajectory remains its own backbone
+    # intra-orientation clustering and analysis
+    # Clustering is done WITHIN each orientation group only — no cross-parent
+    # backbone merging.  This avoids the interface residue mismatch problem
+    # that arises when comparing backbones from different parent orientations.
     orientation_groups  = group_by_orientation(backbone_to_pdb)
     orientation_medoids = {}
     idx_map             = {bb: i for i, bb in enumerate(backbone_ids)}
     heatmap_dir         = os.path.join(output_dir, "orientation_heatmaps")
     superpose_dir       = os.path.join(output_dir, "orientation_superposed")
 
-    print(f"\n── Intra-orientation analysis "
+    # per-backbone cluster assignments accumulated across all orientations
+    bb_cluster_id    = {}   # backbone_id → (orientation_id, local_cluster_id)
+    bb_cluster_medoid = {}  # backbone_id → medoid backbone_id for its cluster
+    global_cluster_rows = []
+
+    total_clusters   = 0
+    surviving_backbones = []
+
+    print(f"\n── Intra-orientation clustering at iRMSD ≤ {irmsd_cutoff} Å "
           f"({len(orientation_groups)} orientation groups) ─────────────")
 
     for oid, bb_ids in sorted(orientation_groups.items()):
@@ -682,10 +693,18 @@ def run(input_dirs, output_dir, binder_chain="A",
         n_valid = len(oid_idx)
         print(f"\n  {oid}  ({n_valid} backbones)")
 
-        if n_valid < 2:
-            print("    Only 1 backbone — no intra-group comparison possible")
-            if n_valid == 1:
-                orientation_medoids[oid] = backbone_ids[oid_idx[0]]
+        if n_valid == 0:
+            continue
+
+        if n_valid == 1:
+            # Single backbone — trivially its own cluster
+            bb   = backbone_ids[oid_idx[0]]
+            print(f"    Only 1 backbone — single cluster")
+            orientation_medoids[oid]   = bb
+            bb_cluster_id[bb]          = (oid, 1)
+            bb_cluster_medoid[bb]      = bb
+            surviving_backbones.append(bb)
+            total_clusters += 1
             continue
 
         sub_mat    = irmsd_matrix[np.ix_(oid_idx, oid_idx)]
@@ -698,23 +717,45 @@ def run(input_dirs, output_dir, binder_chain="A",
                   f"mean={valid.mean():.2f}  "
                   f"max={valid.max():.2f} Å")
 
-        medoid = find_medoid(sub_mat, sub_labels)
-        orientation_medoids[oid] = medoid
-        print(f"    Medoid: {medoid}")
+        # cluster within this orientation
+        local_labels, local_medoids = cluster_and_pick_medoids(
+            sub_mat, sub_labels, irmsd_cutoff
+        )
+        n_local = len(local_medoids)
+        total_clusters += n_local
+
+        # record overall medoid (medoid of all medoids = find_medoid on sub_mat)
+        orientation_medoids[oid] = find_medoid(sub_mat, sub_labels)
+        print(f"    {n_valid} backbones → {n_local} clusters")
+        print(f"    Orientation medoid: {orientation_medoids[oid]}")
+
+        for lcid, lmedoid in sorted(local_medoids.items()):
+            members = [sub_labels[i]
+                       for i, l in enumerate(local_labels) if l == lcid]
+            merged  = [m for m in members if m != lmedoid]
+            tag     = f" ← {', '.join(merged)}" if merged else ""
+            print(f"      [{lcid}] {lmedoid} (medoid){tag}")
+            surviving_backbones.append(lmedoid)
+
+        # store per-backbone assignments
+        for i, bb in enumerate(sub_labels):
+            lcid  = local_labels[i]
+            bb_cluster_id[bb]     = (oid, int(lcid))
+            bb_cluster_medoid[bb] = local_medoids[lcid]
 
         if not dry_run:
             if visualize_orientations:
                 plot_irmsd_clustermap(
                     sub_mat, sub_labels, oid, heatmap_dir,
-                    medoid_id=medoid
+                    medoid_id=orientation_medoids[oid]
                 )
                 plot_contact_distance_heatmap(
                     sub_labels, pep_ca_res_by_id, binder_ca_by_id,
-                    oid, heatmap_dir, medoid_id=medoid
+                    oid, heatmap_dir, medoid_id=orientation_medoids[oid]
                 )
             if superpose_orientations:
                 write_superposed_individual_pdbs(
-                    bb_ids, backbone_to_pdb, medoid,
+                    bb_ids, backbone_to_pdb, orientation_medoids[oid],
                     binder_ca_by_id, oid, superpose_dir, binder_chain
                 )
         else:
@@ -722,29 +763,14 @@ def run(input_dirs, output_dir, binder_chain="A",
             if visualize_orientations:
                 extras.append("heatmaps")
             if superpose_orientations:
-                extras.append("superposed PDB")
+                extras.append("superposed PDBs")
             if extras:
                 print(f"    [DRY RUN] Would write: {', '.join(extras)}")
 
-    # cross-backbone clustering
-    print(f"\nClustering at iRMSD ≤ {irmsd_cutoff} Å...")
-    cluster_labels, medoids = cluster_and_pick_medoids(
-        irmsd_matrix, backbone_ids, irmsd_cutoff
-    )
-    n_clusters          = len(medoids)
-    surviving_backbones = list(medoids.values())
+    print(f"\n{n_backbones} backbones → {total_clusters} clusters "
+          f"across {len(orientation_groups)} orientations")
 
-    print(f"{n_backbones} backbones → {n_clusters} clusters")
-    for cid, medoid in sorted(medoids.items()):
-        members = [backbone_ids[i]
-                   for i, l in enumerate(cluster_labels) if l == cid]
-        merged  = [m for m in members if m != medoid]
-        tag     = f" ← {', '.join(merged)}" if merged else ""
-        print(f"  [{cid}] {medoid} (medoid){tag}")
-
-    print(f"\n{n_clusters} surviving backbones")
-
-    # symlink surviving backbones into output_dir (1 PDB per backbone)
+    # symlink surviving backbone medoids into output_dir
     if dry_run:
         print("\n[DRY RUN] No files written.")
     else:
@@ -757,15 +783,17 @@ def run(input_dirs, output_dir, binder_chain="A",
                 os.remove(dst)
             os.symlink(src, dst)
             n_linked += 1
-        print(f"Symlinked {n_linked} structures → {output_dir}")
+        print(f"Symlinked {n_linked} cluster medoids → {output_dir}")
 
     # CSV log
     rows = []
-    for idx, bb in enumerate(backbone_ids):
-        cid  = cluster_labels[idx]
+    for bb in backbone_ids:
         oid  = parse_orientation_id(bb)
         bca  = binder_ca_by_id.get(bb)
         pcr  = pep_ca_res_by_id.get(bb)
+        oid_local     = bb_cluster_id.get(bb, (oid, None))
+        local_cid     = oid_local[1]
+        cluster_medoid = bb_cluster_medoid.get(bb, "")
 
         contact_cols = {}
         if bca is not None and pcr is not None:
@@ -774,20 +802,21 @@ def run(input_dirs, output_dir, binder_chain="A",
                 contact_cols[f"min_dist_C{rn}"] = round(float(d), 2)
 
         rows.append({
-            "backbone_id":           bb,
-            "orientation_id":        oid,
-            "pdb":                   backbone_to_pdb[bb],
-            "binder_len":            len(bca) if bca is not None else None,
-            "cluster_id":            cid,
-            "cluster_medoid":        medoids[cid],
-            "is_cluster_medoid":     bb == medoids[cid],
-            "orientation_medoid":    orientation_medoids.get(oid, ""),
-            "is_orientation_medoid": bb == orientation_medoids.get(oid, ""),
+            "backbone_id":             bb,
+            "orientation_id":          oid,
+            "pdb":                     backbone_to_pdb[bb],
+            "binder_len":              len(bca) if bca is not None else None,
+            "orientation_cluster_id":  local_cid,
+            "cluster_medoid":          cluster_medoid,
+            "is_cluster_medoid":       bb == cluster_medoid,
+            "orientation_medoid":      orientation_medoids.get(oid, ""),
+            "is_orientation_medoid":   bb == orientation_medoids.get(oid, ""),
             **contact_cols,
         })
 
     df = pd.DataFrame(rows).sort_values(
-        ["cluster_id", "is_cluster_medoid"], ascending=[True, False]
+        ["orientation_id", "orientation_cluster_id", "is_cluster_medoid"],
+        ascending=[True, True, False]
     )
 
     if not dry_run:
@@ -795,7 +824,7 @@ def run(input_dirs, output_dir, binder_chain="A",
         df.to_csv(log_path, index=False)
         print(f"Log: {log_path}")
 
-    print(f"\nFinal: {n_backbones} backbones → {n_clusters} clusters ready for ProteinMPNN")
+    print(f"\nFinal: {n_backbones} backbones → {total_clusters} clusters ({len(orientation_groups)} orientations) ready for ProteinMPNN")
     return df
 
 
