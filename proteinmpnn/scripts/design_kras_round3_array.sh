@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=mpnn_r3
 #SBATCH --partition=short
-#SBATCH --time=6:00:00
+#SBATCH --time=3:00:00
 #SBATCH --mem=3G
 #SBATCH --ntasks=1
 #SBATCH --output=../slurm/mpnn_r3_%a.out
