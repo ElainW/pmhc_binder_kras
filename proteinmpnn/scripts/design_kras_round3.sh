@@ -14,7 +14,7 @@
 # source activate mlfold
 PYTHON="/n/groups/marks/users/aaron/pmhc_cp/envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-folder_with_pdbs="/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r3/clustered"
+folder_with_pdbs="/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
 input_dir="../input/kras_r3"
 output_dir="../outputs/kras_r3"
 
