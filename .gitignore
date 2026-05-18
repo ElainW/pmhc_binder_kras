@@ -30,6 +30,7 @@ af_init_guess/scripts/.ipynb_checkpoints/
 af_init_guess/scripts/__pycache__/
 
 proteinmpnn/scripts/test_protein_mpnn_partial_colab_notebook.ipynb
+proteinmpnn/scripts/__pycache__/
 rfdiffusion/scripts/*.png
 rfdiffusion/scripts/*.csv
 rfdiffusion/scripts/representatives.txt
