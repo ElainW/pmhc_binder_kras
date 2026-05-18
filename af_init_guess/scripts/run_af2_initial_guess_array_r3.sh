@@ -42,7 +42,7 @@ fi
 
 # --- Paths ---
 DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-CHUNK_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r3/kras_chunks"
+CHUNK_DIR="/n/groups/marks/users/aaron/pmhc_cp/af_init_guess/inputs/r3/kras_chunks"
 OUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r3/af2_kras"
 
 # --- Per-job inputs/outputs based on array index ---
