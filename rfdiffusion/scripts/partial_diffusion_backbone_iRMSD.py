@@ -306,38 +306,46 @@ def contact_distance_vector(binder_ca, pep_ca_by_resnum):
 # ── Backbone grouping ─────────────────────────────────────────────────────────
 
 def group_by_backbone(pdb_files):
-    backbone_to_all = defaultdict(list)
+    """
+    Map each backbone ID to its single PDB file.
+    Each backbone is expected to have exactly one associated PDB.
+    Warns if duplicates are found (e.g. from overlapping input_dirs).
+    """
+    backbone_to_pdb = {}
     for pdb in sorted(pdb_files):
-        backbone_to_all[parse_backbone_id(pdb)].append(pdb)
-    backbone_to_rep = {bb: sorted(paths)[0]
-                       for bb, paths in backbone_to_all.items()}
-    return backbone_to_rep, dict(backbone_to_all)
+        bb = parse_backbone_id(pdb)
+        if bb in backbone_to_pdb:
+            print(f"  [WARN] Duplicate backbone {bb} — "
+                  f"keeping {backbone_to_pdb[bb]}, ignoring {pdb}")
+        else:
+            backbone_to_pdb[bb] = pdb
+    return backbone_to_pdb
 
 
-def group_by_orientation(backbone_to_rep):
+def group_by_orientation(backbone_to_pdb):
     oid_to_bbs = defaultdict(list)
-    for bb in backbone_to_rep:
+    for bb in backbone_to_pdb:
         oid_to_bbs[parse_orientation_id(bb)].append(bb)
     return dict(oid_to_bbs)
 
 
 # ── Load all coordinate data ──────────────────────────────────────────────────
 
-def load_backbone_data(backbone_to_rep, binder_chain):
+def load_backbone_data(backbone_to_pdb, binder_chain):
     """
     Load binder Cα, peptide Cα (for contact mask), and peptide Cα-by-resnum for every
     backbone representative.
 
     Returns three dicts keyed by backbone_id — value is None on load failure.
     """
-    backbone_ids     = sorted(backbone_to_rep.keys())
+    backbone_ids     = sorted(backbone_to_pdb.keys())
     binder_ca_by_id  = {}
     pep_ca_by_id  = {}
     pep_ca_res_by_id = {}
 
     print(f"Loading {len(backbone_ids)} backbone representatives...")
     for bb in backbone_ids:
-        pdb = backbone_to_rep[bb]
+        pdb = backbone_to_pdb[bb]
         try:
             binder_ca_by_id[bb]  = get_chain_ca_coords(pdb, binder_chain)
             pep_ca_by_id[bb]  = get_peptide_ca_coords(pdb)
@@ -476,7 +484,7 @@ def plot_contact_distance_heatmap(labels, pep_ca_res_by_id, binder_ca_by_id,
 
 # ── Multi-model superposed PDB ────────────────────────────────────────────────
 
-def write_superposed_multimodel_pdb(backbone_ids, backbone_to_rep,
+def write_superposed_multimodel_pdb(backbone_ids, backbone_to_pdb,
                                     medoid_id, binder_ca_by_id,
                                     orientation_id, output_dir,
                                     binder_chain="A"):
@@ -520,7 +528,7 @@ def write_superposed_multimodel_pdb(backbone_ids, backbone_to_rep,
             fh.write(f"REMARK  backbone={bb}  iRMSD_to_medoid={irmsd_val:.3f}\n")
 
             for serial, atom in enumerate(
-                    get_full_chain_atoms(backbone_to_rep[bb], binder_chain),
+                    get_full_chain_atoms(backbone_to_pdb[bb], binder_chain),
                     start=1):
                 coords = atom["coords"].copy()
                 if transform is not None:
@@ -580,17 +588,15 @@ def run(input_dirs, output_dir, binder_chain="A",
         raise FileNotFoundError(f"No '{pattern}' files in {input_dirs}")
     print(f"Found {len(pdb_files)} PDB files")
 
-    # group by backbone
-    backbone_to_rep, backbone_to_all = group_by_backbone(pdb_files)
-    backbone_ids = sorted(backbone_to_rep.keys())
-    n_backbones  = len(backbone_ids)
+    # group by backbone (1 PDB per backbone)
+    backbone_to_pdb = group_by_backbone(pdb_files)
+    backbone_ids    = sorted(backbone_to_pdb.keys())
+    n_backbones     = len(backbone_ids)
     print(f"Unique backbones: {n_backbones}")
-    for bb, paths in sorted(backbone_to_all.items()):
-        print(f"  {bb}: {len(paths)} structure(s)")
 
     # load coordinates
     binder_ca_by_id, pep_ca_by_id, pep_ca_res_by_id = load_backbone_data(
-        backbone_to_rep, binder_chain
+        backbone_to_pdb, binder_chain
     )
 
     # pairwise iRMSD
@@ -604,53 +610,65 @@ def run(input_dirs, output_dir, binder_chain="A",
         print(f"iRMSD: min={fv.min():.2f}  mean={fv.mean():.2f}  "
               f"max={fv.max():.2f} Å")
 
-    # intra-orientation analysis
-    orientation_groups  = group_by_orientation(backbone_to_rep)
+    # intra-orientation analysis (always runs)
+    # each orientation groups e.g. orient_252_pT20__31_pT12__0..99 together
+    # without collapsing them — each trajectory remains its own backbone
+    orientation_groups  = group_by_orientation(backbone_to_pdb)
     orientation_medoids = {}
     idx_map             = {bb: i for i, bb in enumerate(backbone_ids)}
+    heatmap_dir         = os.path.join(output_dir, "orientation_heatmaps")
+    superpose_dir       = os.path.join(output_dir, "orientation_superposed")
 
-    if visualize_orientations or superpose_orientations:
-        heatmap_dir   = os.path.join(output_dir, "orientation_heatmaps")
-        superpose_dir = os.path.join(output_dir, "orientation_superposed")
+    print(f"\n── Intra-orientation analysis "
+          f"({len(orientation_groups)} orientation groups) ─────────────")
 
-        print(f"\n── Intra-orientation analysis ──────────────────────────────")
-        for oid, bb_ids in sorted(orientation_groups.items()):
-            print(f"\n  {oid}  ({len(bb_ids)} backbones)")
-            oid_idx = [idx_map[bb] for bb in bb_ids if bb in idx_map]
-            if len(oid_idx) < 2:
-                print("    Skipped (< 2 valid backbones)")
-                continue
+    for oid, bb_ids in sorted(orientation_groups.items()):
+        oid_idx = [idx_map[bb] for bb in bb_ids if bb in idx_map]
+        n_valid = len(oid_idx)
+        print(f"\n  {oid}  ({n_valid} backbones)")
 
-            sub_mat    = irmsd_matrix[np.ix_(oid_idx, oid_idx)]
-            sub_labels = [backbone_ids[i] for i in oid_idx]
+        if n_valid < 2:
+            print("    Only 1 backbone — no intra-group comparison possible")
+            if n_valid == 1:
+                orientation_medoids[oid] = backbone_ids[oid_idx[0]]
+            continue
 
-            upper = sub_mat[np.triu_indices(len(sub_labels), k=1)]
-            valid = upper[~np.isinf(upper)]
-            if len(valid):
-                print(f"    iRMSD: min={valid.min():.2f}  "
-                      f"mean={valid.mean():.2f}  "
-                      f"max={valid.max():.2f} Å")
+        sub_mat    = irmsd_matrix[np.ix_(oid_idx, oid_idx)]
+        sub_labels = [backbone_ids[i] for i in oid_idx]
 
-            medoid = find_medoid(sub_mat, sub_labels)
-            orientation_medoids[oid] = medoid
-            print(f"    Medoid: {medoid}")
+        upper = sub_mat[np.triu_indices(n_valid, k=1)]
+        valid = upper[~np.isinf(upper)]
+        if len(valid):
+            print(f"    iRMSD: min={valid.min():.2f}  "
+                  f"mean={valid.mean():.2f}  "
+                  f"max={valid.max():.2f} Å")
 
-            if not dry_run:
-                if visualize_orientations:
-                    plot_irmsd_heatmap(
-                        sub_mat, sub_labels, oid, heatmap_dir
-                    )
-                    plot_contact_distance_heatmap(
-                        sub_labels, pep_ca_res_by_id, binder_ca_by_id,
-                        oid, heatmap_dir, medoid_id=medoid
-                    )
-                if superpose_orientations:
-                    write_superposed_multimodel_pdb(
-                        bb_ids, backbone_to_rep, medoid,
-                        binder_ca_by_id, oid, superpose_dir, binder_chain
-                    )
-            else:
-                print("    [DRY RUN] Would write heatmaps and superposed PDB")
+        medoid = find_medoid(sub_mat, sub_labels)
+        orientation_medoids[oid] = medoid
+        print(f"    Medoid: {medoid}")
+
+        if not dry_run:
+            if visualize_orientations:
+                plot_irmsd_heatmap(
+                    sub_mat, sub_labels, oid, heatmap_dir
+                )
+                plot_contact_distance_heatmap(
+                    sub_labels, pep_ca_res_by_id, binder_ca_by_id,
+                    oid, heatmap_dir, medoid_id=medoid
+                )
+            if superpose_orientations:
+                write_superposed_multimodel_pdb(
+                    bb_ids, backbone_to_pdb, medoid,
+                    binder_ca_by_id, oid, superpose_dir, binder_chain
+                )
+        else:
+            extras = []
+            if visualize_orientations:
+                extras.append("heatmaps")
+            if superpose_orientations:
+                extras.append("superposed PDB")
+            if extras:
+                print(f"    [DRY RUN] Would write: {', '.join(extras)}")
 
     # cross-backbone clustering
     print(f"\nClustering at iRMSD ≤ {irmsd_cutoff} Å...")
@@ -668,22 +686,18 @@ def run(input_dirs, output_dir, binder_chain="A",
         tag     = f" ← {', '.join(merged)}" if merged else ""
         print(f"  [{cid}] {medoid} (medoid){tag}")
 
-    total = sum(len(backbone_to_all[bb]) for bb in surviving_backbones)
-    print(f"\n{total} structures from {n_clusters} surviving backbones")
+    print(f"\n{n_clusters} surviving backbones")
 
-    # copy structures
+    # copy structures (1 PDB per surviving backbone)
     if dry_run:
         print("\n[DRY RUN] No files written.")
     else:
         os.makedirs(output_dir, exist_ok=True)
-        copied = 0
         for bb in surviving_backbones:
-            for pdb_path in backbone_to_all[bb]:
-                shutil.copy2(pdb_path,
-                             os.path.join(output_dir,
-                                          os.path.basename(pdb_path)))
-                copied += 1
-        print(f"Copied {copied} structures → {output_dir}")
+            shutil.copy2(backbone_to_pdb[bb],
+                         os.path.join(output_dir,
+                                      os.path.basename(backbone_to_pdb[bb])))
+        print(f"Copied {len(surviving_backbones)} structures → {output_dir}")
 
     # CSV log
     rows = []
@@ -702,14 +716,13 @@ def run(input_dirs, output_dir, binder_chain="A",
         rows.append({
             "backbone_id":           bb,
             "orientation_id":        oid,
-            "representative_pdb":    backbone_to_rep[bb],
+            "pdb":                   backbone_to_pdb[bb],
             "binder_len":            len(bca) if bca is not None else None,
             "cluster_id":            cid,
             "cluster_medoid":        medoids[cid],
             "is_cluster_medoid":     bb == medoids[cid],
             "orientation_medoid":    orientation_medoids.get(oid, ""),
             "is_orientation_medoid": bb == orientation_medoids.get(oid, ""),
-            "n_structures":          len(backbone_to_all[bb]),
             **contact_cols,
         })
 
@@ -722,8 +735,7 @@ def run(input_dirs, output_dir, binder_chain="A",
         df.to_csv(log_path, index=False)
         print(f"Log: {log_path}")
 
-    print(f"\nFinal: {n_backbones} backbones → {n_clusters} clusters "
-          f"→ {total} structures ready for ProteinMPNN")
+    print(f"\nFinal: {n_backbones} backbones → {n_clusters} clusters ready for ProteinMPNN")
     return df
 
 
