@@ -2,17 +2,17 @@
 """
 prepare_monomer_stubs.py
 
-Reads a FASTA file of binder sequences and writes one minimal stub PDB per
-design into a flat output directory. The stub PDBs are single-residue GLY
-placeholders — predict.py with -no_initial_guess ignores the coordinates
-entirely and folds from sequence only.
+Reads a FASTA file of binder sequences and writes:
+  1. One stub PDB per design into a flat stubs/ directory
+  2. One runlist file per design (single line = design name) for -runlist flag
+  3. A design_index.tsv mapping array_idx → design name
 
-Also writes a design list TSV (design_index, design_name, stub_pdb) used
-by the SLURM array script to map SLURM_ARRAY_TASK_ID → design.
+predict.py uses -runlist to process only the specified tag from -pdbdir,
+so each SLURM array job runs exactly one design.
 
 Usage:
     python prepare_monomer_stubs.py \
-        --fasta  /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
+        --fasta   /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
         --out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs/
 """
 
@@ -58,22 +58,33 @@ def main():
     parser.add_argument('--out_dir', required=True)
     args = parser.parse_args()
 
-    os.makedirs(args.out_dir, exist_ok=True)
+    pdb_dir     = os.path.join(args.out_dir, 'pdbs')
+    runlist_dir = os.path.join(args.out_dir, 'runlists')
+    os.makedirs(pdb_dir,     exist_ok=True)
+    os.makedirs(runlist_dir, exist_ok=True)
 
     records = parse_fasta(args.fasta)
     print(f"Found {len(records)} sequences in {args.fasta}")
 
     index_path = os.path.join(args.out_dir, 'design_index.tsv')
     with open(index_path, 'w') as idx:
-        idx.write('array_idx\tdesign\tsequence\tstub_dir\n')
+        idx.write('array_idx\tdesign\trunlist\n')
         for i, (header, seq) in enumerate(records):
             name     = header.removesuffix('_af2pred')
-            stub_pdb = os.path.join(args.out_dir, f'{name}.pdb')
+            # Stub PDB — coordinates ignored by -no_initial_guess
+            stub_pdb = os.path.join(pdb_dir, f'{name}.pdb')
             with open(stub_pdb, 'w') as f:
                 f.write(_GLY_PDB)
-            idx.write(f'{i}\t{name}\t{seq}\t{stub_pdb}\n')
 
-    print(f"Written {len(records)} stub PDBs → {args.out_dir}")
+			# Runlist — single line with the design name (no .pdb extension)
+            runlist = os.path.join(runlist_dir, f'{name}.txt')
+            with open(runlist, 'w') as f:
+                f.write(f'{name}\n')
+
+            idx.write(f'{i}\t{name}\t{runlist}\n')
+
+    print(f"Written {len(records)} stub PDBs → {pdb_dir}")
+    print(f"Written {len(records)} runlists   → {runlist_dir}")
     print(f"Design index → {index_path}")
     print(f"\nSubmit SLURM array with:")
     print(f"  sbatch --array=0-{len(records)-1} run_af2_monomer_r2.5_array.sh")

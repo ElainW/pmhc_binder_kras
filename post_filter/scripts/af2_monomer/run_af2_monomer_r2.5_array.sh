@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
 #SBATCH -c 4
-#SBATCH -o /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/af2_monomer_r2.5_%a.log
-#SBATCH -e /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/af2_monomer_r2.5_%a.err
+#SBATCH -o /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.log
+#SBATCH -e /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.err
 
 # -------------------------------------------------------
 # AF2 Monomer — SLURM array job (Round 2.5)
@@ -47,18 +47,21 @@ fi
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-STUB_DIR="/n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs"
+STUB_BASE="/n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs"
+PDB_DIR="${STUB_BASE}/pdbs"
+RUNLIST_DIR="${STUB_BASE}/runlists"
 OUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/af2_monomer"
-INDEX_FILE="${STUB_DIR}/design_index.tsv"
+INDEX_FILE="${STUB_BASE}/design_index.tsv"
 
 mkdir -p "${OUT_DIR}"
 
 # ── Look up design for this array task ───────────────────────────────────────
-# design_index.tsv columns: array_idx  design  sequence  stub_dir
+# design_index.tsv columns: array_idx  design  runlist
+SLURM_ARRAY_TASK_ID=0
 DESIGN=$(awk -F'\t' -v idx="${SLURM_ARRAY_TASK_ID}" \
     'NR>1 && $1==idx {print $2}' "${INDEX_FILE}")
-STUB_DIR_DESIGN=$(awk -F'\t' -v idx="${SLURM_ARRAY_TASK_ID}" \
-    'NR>1 && $1==idx {print $4}' "${INDEX_FILE}")
+RUNLIST=$(awk -F'\t' -v idx="${SLURM_ARRAY_TASK_ID}" \
+    'NR>1 && $1==idx {print $3}' "${INDEX_FILE}")
 
 if [ -z "${DESIGN}" ]; then
     echo "ERROR: no design found for array index ${SLURM_ARRAY_TASK_ID} in ${INDEX_FILE}"
@@ -71,10 +74,11 @@ SCOREFILE="${DESIGN_OUT}/monomer_scores.sc"
 mkdir -p "${DESIGN_OUT}"
 
 echo "======================================================"
-echo "SLURM job:    ${SLURM_JOB_ID}"
+#echo "SLURM job:    ${SLURM_JOB_ID}"
 echo "Array task:   ${SLURM_ARRAY_TASK_ID}"
 echo "Design:       ${DESIGN}"
-echo "Stub dir:     ${STUB_DIR_DESIGN}"
+echo "PDB dir:      ${PDB_DIR}"
+echo "Runlist:      ${RUNLIST}"
 echo "Output dir:   ${DESIGN_OUT}"
 echo "Node:         $(hostname)"
 echo "GPU:          $(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null || echo unknown)"
@@ -88,11 +92,14 @@ echo "======================================================"
 # -outpdbdir        write predicted monomer PDB here
 # -scorefilename    per-design .sc score file
 python "${DL_BINDER_DESIGN_DIR}/af2_initial_guess/predict.py" \
-    -pdbdir        "${STUB_DIR_DESIGN}" \
+    -pdbdir        "${PDB_DIR}" \
     -outpdbdir     "${DESIGN_OUT}"      \
+    -pae_outdir    "${DESIGN_OUT}/pae"
     -scorefilename "${SCOREFILE}"       \
+    -runlist       "${RUNLIST}"         \
     -force_monomer                      \
-    -no_initial_guess
+    -no_initial_guess \
+    -debug
 
 EXIT_CODE=$?
 
