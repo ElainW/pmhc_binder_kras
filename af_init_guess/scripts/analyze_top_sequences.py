@@ -59,8 +59,7 @@ def main(args):
         flags = []
         if c > -3.0:   flags.append('CHARGE_HIGH')
         if nC > 0:     flags.append('CYS')
-        if nM > 1:     flags.append('MET_HIGH')
-        elif nM == 1:  flags.append('MET_ONE')
+        if nM >= 3:    flags.append('MET_HIGH')
         if nW > 0:     flags.append('TRP')
 
         rows.append({
@@ -88,8 +87,9 @@ def main(args):
     print(f"    Charge > -3.0:    {(df['charge'] > -3.0).sum()}")
     print(f"    Charge -3.0:      {(df['charge'] == -3.0).sum()}  (borderline)")
     print(f"    Any Cys:          {(df['n_C'] > 0).sum()}")
-    print(f"    Met > 1:          {(df['n_M'] > 1).sum()}")
-    print(f"    Met == 1:         {(df['n_M'] == 1).sum()}")
+    print(f"    Met >= 3:         {(df['n_M'] >= 3).sum()}")
+    print(f"    Met == 2:         {(df['n_M'] == 2).sum()}  (acceptable)")
+    print(f"    Met == 1:         {(df['n_M'] == 1).sum()}  (acceptable)")
     print(f"    Any Trp:          {(df['n_W'] > 0).sum()}")
     print(f"    Clean (OK):       {(df['flags'] == 'OK').sum()}")
 
