@@ -27,7 +27,7 @@ python batch_pMHC_fold_o2.py \
     --peptides VVGADGVGK \
     --minib_dir /n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r3/af2_kras/top_pdbs/ \
     --structs_per_job 20 \
-    --t 01:30:00
+    --t 00:30:00
 
 # Off-target
 python batch_pMHC_fold_o2.py \
@@ -58,4 +58,4 @@ python batch_pMHC_fold_o2.py \
     --peptides VVGAGGVGK \
     --minib_dir /n/groups/marks/users/aaron/pmhc_cp/specificity/pMHC_fold/inputs/r3/off_target_pdbs/ \
     --structs_per_job 20 \
-    --t 01:30:00
+    --t 00:30:00
