@@ -10,6 +10,7 @@ dependencies:
   - ml-collections
   - ml_dtypes
   - tensorflow
+  - pandas
   - pip
   #- pyrosetta
   - mock
