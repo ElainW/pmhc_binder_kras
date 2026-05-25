@@ -34,10 +34,9 @@ python af3_design_stats_server.py \
 
 
 # step 2: visualize stats
-python plot_design_stats.py \
+python plot_design_stats_noaf2.py \
     --stats_tsv    $DIR/outputs/r3/af3_nomsa/af3_design_stats.tsv \
     --epitopes_csv $DIR/inputs/r3/design_epitopes.csv \
     --sequences    $DIR/inputs/r3/af2_monomer/af2_monomer_sequences.csv \
-    --plddt_tsv    $DIR/outputs/r3/af2_monomer/stats/monomer_scores_your_designs.tsv \
     --specificity_tsv ~/Desktop/pmhc_binder_kras/specificity/analysis/r3/merged_scores_ranked.tsv \
     --out_dir      $DIR/outputs/r3/af3_nomsa_plots/
