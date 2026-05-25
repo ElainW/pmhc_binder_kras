@@ -406,7 +406,10 @@ def plot_plddt_ipsae(df_stats: pd.DataFrame,
     df_spec = df_spec.copy()
     df_spec['design'] = (df_spec['design']
                          .str.replace('pT', 'pt', regex=True)
-                         .str.removesuffix('_af2pred'))
+                         .str.removesuffix('_af2pred')
+                         .str.replace('__', '_', regex=True)
+                         .str.replace('0.1', '01', regex=True)
+                         .str.replace('0.2', '02', regex=True))
 
     # Merge everything
     df = df_stats[['design', 'ipsae_binder_peptide', 'ipsae_n_contacts',
