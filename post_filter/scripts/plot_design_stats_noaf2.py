@@ -108,7 +108,11 @@ def _barh_panel(ax, labels, vals, norm_vals_for_color, title,
 def plot_charge_cysteine(df_epi: pd.DataFrame, df_seq: pd.DataFrame,
                          out_path: str):
     df_seq = df_seq.copy()
-    df_seq['name'] = df_seq['name'].str.removesuffix('_af2pred').str.lower()
+    df_seq['name'] = (df_seq['name']
+                         .str.removesuffix('_af2pred')
+                         .str.replace('__', '_', regex=True)
+                         .str.replace('0.1', '01', regex=True)
+                         .str.replace('0.2', '02', regex=True))
     xlsx_seq = df_seq[df_seq['source'] == 'your_designs'].set_index('name')['sequence'].to_dict()
 
     rows = []
