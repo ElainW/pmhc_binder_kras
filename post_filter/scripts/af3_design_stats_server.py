@@ -4,18 +4,21 @@ af3_design_stats_server.py
 Wrapper around af3_design_stats.py that overrides AF3 file discovery
 functions to match the AF3 server output directory structure:
 
-  {af3_out_dir}/{design}/
-    fold_{design}_model_0.cif
-    fold_{design}_summary_confidences_0.json   <- iptm/ptm/ranking_score
-    fold_{design}_full_data_0.json             <- PAE, token_chain_ids
+  {af3_out_dir}/{design_sanitized}/
+    fold_{design_sanitized}_model_0.cif
+    fold_{design_sanitized}_summary_confidences_0.json
+    fold_{design_sanitized}_full_data_0.json
 
-Usage (same as af3_design_stats.py):
+The AF3 server sanitizes design names: replaces '.' with '' and '__' with '_'.
+This wrapper handles the name mapping transparently.
+
+Usage:
     python af3_design_stats_server.py \
-        --af3_out_dir     /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/af3_nomsa/ \
-        --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/fastrelax_af3/relaxed_pdbs/ \
-        --out_dir         /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/ \
-        --targets_csv     /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/design_targets.csv \
-        --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/fastrelax_af3/fastrelax_af3_scores.tsv
+        --af3_out_dir     $DIR/outputs/r2.5/af3_nomsa/ \
+        --relaxed_pdb_dir $DIR/outputs/r2.5/fastrelax_af3_nomsa/relaxed_pdbs/ \
+        --out_dir         $DIR/outputs/r2.5/af3_nomsa/ \
+        --targets_csv     $DIR/inputs/r2.5/design_epitopes.csv \
+        --fastrelax_tsv   $DIR/outputs/r2.5/fastrelax_af3_nomsa/fastrelax_af3_scores.tsv
 """
 
 from __future__ import annotations
@@ -26,25 +29,30 @@ import json
 
 import numpy as np
 
-# Import everything from af3_design_stats — then override discovery functions
 import af3_design_stats
-from af3_design_stats import *   # noqa: F401, F403  re-exports all public names
+from af3_design_stats import *   # noqa: F401, F403
 
-MODEL_IDX = 0   # AF3 server outputs 0-4; always use index 0
+MODEL_IDX = 0
 
 
 # ── Override: file discovery ──────────────────────────────────────────────────
 
 def find_model_cif(af3_out_dir: str, design: str) -> str | None:
-    """Find fold_{design}_model_{MODEL_IDX}.cif in {af3_out_dir}/{design}/."""
-    path = os.path.join(af3_out_dir, design,
-                        f'fold_{design}_model_{MODEL_IDX}.cif')
-    return path if os.path.exists(path) else None
+    """
+    Find fold_{design}_model_{MODEL_IDX}.cif.
+    af3_out_dir is already the per-design subdir when called from process_design.
+    """
+    path = os.path.join(af3_out_dir, f'fold_{design}_model_{MODEL_IDX}.cif')
+    if os.path.exists(path):
+        return path
+    matches = sorted(glob.glob(os.path.join(af3_out_dir, f'fold_*_model_{MODEL_IDX}.cif')))
+    return matches[0] if matches else None
 
 
 def find_top_seed_confidences(af3_out_dir: str) -> str | None:
     """
-    Return path to fold_*_full_data_{MODEL_IDX}.json (contains PAE + token_chain_ids).
+    Return path to fold_*_full_data_{MODEL_IDX}.json (PAE + token_chain_ids).
+    af3_out_dir is the per-design subdir.
     """
     matches = sorted(glob.glob(
         os.path.join(af3_out_dir, f'fold_*_full_data_{MODEL_IDX}.json')
@@ -54,10 +62,14 @@ def find_top_seed_confidences(af3_out_dir: str) -> str | None:
 
 def get_top_level_confidences(af3_out_dir: str, design: str) -> dict:
     """Read fold_{design}_summary_confidences_{MODEL_IDX}.json."""
-    path = os.path.join(af3_out_dir, design,
-                        f'fold_{design}_summary_confidences_{MODEL_IDX}.json')
+    path = os.path.join(af3_out_dir, f'fold_{design}_summary_confidences_{MODEL_IDX}.json')
     if not os.path.exists(path):
-        return {}
+        matches = sorted(glob.glob(
+            os.path.join(af3_out_dir, f'fold_*_summary_confidences_{MODEL_IDX}.json')
+        ))
+        if not matches:
+            return {}
+        path = matches[0]
     try:
         with open(path) as f:
             d = json.load(f)
@@ -85,17 +97,17 @@ def get_top_ranking_score(af3_out_dir: str) -> dict:
         return {}
 
 
-# Save original process_design BEFORE patching to avoid infinite recursion
+# ── Save original before patching ────────────────────────────────────────────
 _original_process_design = af3_design_stats.process_design
 
-# Patch module-level discovery functions (safe — no circular reference)
+# Patch module-level discovery functions
 af3_design_stats.find_model_cif            = find_model_cif
 af3_design_stats.find_top_seed_confidences = find_top_seed_confidences
 af3_design_stats.get_top_level_confidences = get_top_level_confidences
 af3_design_stats.get_top_ranking_score     = get_top_ranking_score
 
 
-# ── Override: process_design — resolve per-design subdir for server layout ────
+# ── Override: process_design ──────────────────────────────────────────────────
 
 def process_design(
     design: str,
@@ -105,23 +117,19 @@ def process_design(
 ) -> tuple[dict, dict[str, list]]:
     """
     Resolves the per-design subdirectory ({af3_out_dir}/{design}/) and calls
-    the original af3_design_stats.process_design with that path, so the
-    overridden discovery functions glob within the correct directory.
+    the original process_design with that path.
+    Design names in the CSV are already sanitized to match the server directory names.
     """
-    design_dir = os.path.join(af3_out_dir, design)
-    if not os.path.isdir(design_dir):
-        print(f"    WARNING: design directory not found: {design_dir}")
-        design_dir = af3_out_dir   # fallback
 
     return _original_process_design(
         design          = design,
-        af3_out_dir     = design_dir,
+        af3_out_dir     = af3_out_dir,
         relaxed_pdb_dir = relaxed_pdb_dir,
         target_info     = target_info,
     )
 
 
-# ── Patch process_design last (after _original_process_design is saved) ───────
+# Patch process_design last
 af3_design_stats.process_design = process_design
 
 
