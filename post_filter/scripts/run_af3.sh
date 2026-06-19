@@ -18,6 +18,12 @@ python fastrelax_designs_af3.py \
     --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
     --n_repeats   3"
 
+python fastrelax_designs_af3.py \
+    --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_nomsa_all/ \
+    --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa_all/ \
+    --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
+    --n_repeats   3
+
 # step 1: calculate stats
 python af3_design_stats.py \
     --af3_out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
@@ -33,6 +39,13 @@ python af3_design_stats.py \
     --targets_csv     /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
     --fastrelax_tsv   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa/fastrelax_af3_scores.tsv
 
+python af3_design_stats_server.py \
+    --af3_out_dir     ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa_all/ \
+    --relaxed_pdb_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa_all/relaxed_pdbs/ \
+    --out_dir         ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa_all/ \
+    --targets_csv     ~/Desktop/pmhc_binder_kras/post_filter/inputs/design_epitopes.csv \
+    --fastrelax_tsv   ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa_all/fastrelax_af3_scores.tsv
+
 # step 2: visualize stats
 python plot_author_stats.py \
     --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/af3_design_stats.tsv \
@@ -47,21 +60,28 @@ python plot_author_stats.py \
     --xlsx         /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
     --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
     --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_nomsa_plots/
-
+    
+python plot_author_stats.py \
+    --stats_tsv    ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa_all/af3_design_stats.tsv \
+    --epitopes_csv ~/Desktop/pmhc_binder_kras/post_filter/inputs/design_epitopes.csv \
+    --xlsx         ~/Desktop/pmhc_binder_kras/post_filter/inputs/science.adv0185_data_s1.csv \
+    --plddt_tsv    ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
+    --out_dir      ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa_all_plots/
+    
 
 # step 0: run fastrelax
 sbatch -p priority -c 1 -t 0-12:00 --mem=3G -o ${slurm_dir}/af3-r2-%j.out -e ${slurm_dir}/af3-r2-%j.err -J af3-r2-design --wrap="
  python fastrelax_designs_af3.py \
-     --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
-     --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/ \
-     --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
+     --af3_out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3/ \
+     --out_dir     ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/fastrelax_af3/ \
+     --dalphaball ~/Desktop/pmhc_binder_kras/post_filter/scripts/DAlphaBall.gcc \
      --n_repeats   3"
 
 sbatch -p priority -c 1 -t 0-12:00 --mem=3G -o ${slurm_dir}/af3-r2-nomsa-%j.out -e ${slurm_dir}/af3-r2-nomsa-%j.err -J af3-r2-nomsa-design --wrap="
  python fastrelax_designs_af3.py \
-     --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
-     --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3_nomsa/ \
-     --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
+     --af3_out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3_nomsa/ \
+     --out_dir     ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/fastrelax_af3_nomsa/ \
+     --dalphaball ~/Desktop/pmhc_binder_kras/post_filter/scripts/DAlphaBall.gcc \
      --n_repeats   3"
 
 # step 1: calculate stats
