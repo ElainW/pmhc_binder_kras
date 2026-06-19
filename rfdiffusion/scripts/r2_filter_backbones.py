@@ -26,9 +26,9 @@ python filter_backbones_partial.py \
 # Filter all tier 1 outputs:
 python r2_filter_backbones.py \
     --input_dirs \
-        /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/tier1/orient_247 \
-        /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/tier1/orient_34 \
-    --output_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/tier1_filtered \
+        ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/tier1/orient_247 \
+        ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/tier1/orient_34 \
+    --output_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/tier1_filtered \
     --peptide_len 9 \
     --clash_dist 4.0 \
     --max_clashes 0 \

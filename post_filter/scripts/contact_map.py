@@ -24,15 +24,15 @@ Usage:
     # On unrelaxed pMHC fold structures (default):
     python contact_map.py \
         --merged_scores .../merged_scores_ranked.tsv \
-        --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_unrelaxed/
+        --split_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/contact_unrelaxed/
 
     # On FastRelaxed structures:
     python contact_map.py \
         --merged_scores .../merged_scores_ranked.tsv \
-        --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/relaxed_pdbs/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_relaxed/
+        --split_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \
+        --relaxed_pdb_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/fastrelax/relaxed_pdbs/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/contact_relaxed/
 
     When --relaxed_pdb_dir is given, residues are read from
     {relaxed_pdb_dir}/{design}_relaxed.pdb (chain A = binder, chain B = MHC+peptide)

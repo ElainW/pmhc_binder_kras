@@ -12,7 +12,7 @@ import sys
 import pickle
 import json
 
-sys.path.insert( 0, '/n/groups/marks/users/aaron/pmhc/alphafold')
+sys.path.insert( 0, '~/Desktop/pmhc_binder_kras/alphafold')
 
 import numpy as np
 import pandas as pd
@@ -420,7 +420,7 @@ for model_name in [args.model_name]:
 out_dir = args.out_dir
 print('out_dir:', out_dir)
 
-alignment_df = pd.read_csv('/n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/alignments_all_alleles_vs_pdb_June29_2024.csv')
+alignment_df = pd.read_csv('~/Desktop/pmhc_binder_kras/pMHCI_binder_design/pMHC_fold/alignments_all_alleles_vs_pdb_June29_2024.csv')
 
 
 mhc_template_dir = args.mhc_dir

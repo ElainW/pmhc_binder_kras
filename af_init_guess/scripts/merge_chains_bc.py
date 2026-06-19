@@ -5,8 +5,8 @@ numbering to prevent PyRosetta from detecting internal chain breaks.
 
 Usage:
     python merge_chains_bc.py \
-        --input_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_pdbs/ \
-        --output_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/threaded_pdbs_merged/
+        --input_dir ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/threaded_pdbs/ \
+        --output_dir ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/threaded_pdbs_merged/
 """
 
 import os

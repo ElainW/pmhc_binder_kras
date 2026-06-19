@@ -6,17 +6,17 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16G
 #SBATCH -c 4
-#SBATCH -o /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.log
-#SBATCH -e /n/groups/marks/users/aaron/pmhc_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.err
+#SBATCH -o ~/Desktop/pmhc_binder_kras_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.log
+#SBATCH -e ~/Desktop/pmhc_binder_kras_cp/post_filter/slurm/r2.5/af2_monomer/af2_monomer_r2.5_%a.err
 
 # -------------------------------------------------------
 # AF2 Monomer — SLURM array job (Round 2.5)
 # One job per design, predicts from sequence only (no initial guess).
 #
 # Prepare stub PDBs first (run once on login node):
-#   python /n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts/prepare_monomer_stubs.py \
-#       --fasta   /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
-#       --out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs/
+#   python ~/Desktop/pmhc_binder_kras_cp/post_filter/scripts/prepare_monomer_stubs.py \
+#       --fasta   ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
+#       --out_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/stubs/
 #
 # Then submit (replace N with len(designs)-1 printed by prepare_monomer_stubs.py):
 #   sbatch --array=0-N run_af2_monomer_r2.5_array.sh
@@ -24,12 +24,12 @@
 
 # ── Environment ──────────────────────────────────────────────────────────────
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/af2_binder_design
 
 export LD_LIBRARY_PATH=\
-/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:\
-/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:\
-/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:\
+~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:\
+~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib:\
+~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:\
 $LD_LIBRARY_PATH
 
 # ── Validate GPU ─────────────────────────────────────────────────────────────
@@ -46,11 +46,11 @@ if [ $? -ne 0 ]; then
 fi
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-STUB_BASE="/n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs"
+DL_BINDER_DESIGN_DIR="~/Desktop/pmhc_binder_kras/dl_binder_design"
+STUB_BASE="~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/stubs"
 PDB_DIR="${STUB_BASE}/pdbs"
 RUNLIST_DIR="${STUB_BASE}/runlists"
-OUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/af2_monomer"
+OUT_DIR="~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2.5/af2_monomer"
 INDEX_FILE="${STUB_BASE}/design_index.tsv"
 
 mkdir -p "${OUT_DIR}"

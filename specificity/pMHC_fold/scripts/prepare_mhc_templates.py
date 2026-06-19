@@ -10,7 +10,7 @@ Usage:
 from Bio.PDB import PDBParser, PDBIO, Select
 import os
 
-TEMPLATE_DIR = "/n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/pmhc_pdbs/"
+TEMPLATE_DIR = "~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/pmhc_pdbs/"
 
 # (pdb_id, mhc_chain, mhc_resi_start, mhc_resi_end, peptide_chain)
 STRUCTURES = [

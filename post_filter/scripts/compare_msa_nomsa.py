@@ -36,12 +36,12 @@ Directory conventions:
 
 Usage:
     python compare_msa_nomsa.py \
-        --af3_msa_dir    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
-        --af3_nomsa_dir  /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_nomsa/ \
-        --relaxed_msa_dir   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \
-        --relaxed_nomsa_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa/relaxed_pdbs/ \
-        --targets_csv    /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
-        --out_dir        /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/msa_comparison/ \
+        --af3_msa_dir    ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3/ \
+        --af3_nomsa_dir  ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa/ \
+        --relaxed_msa_dir   ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/fastrelax_af3/relaxed_pdbs/ \
+        --relaxed_nomsa_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/fastrelax_af3_nomsa/relaxed_pdbs/ \
+        --targets_csv    ~/Desktop/pmhc_binder_kras/post_filter/inputs/design_epitopes.csv \
+        --out_dir        ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/msa_comparison/ \
         --designs gp100-3 hiv-10 hiv-9 mage-282 mage-4 mage-513 phox2b-11 prame-2 prame-9 sars-6 wt1-5 wt1-8 yfv-2
 """
 

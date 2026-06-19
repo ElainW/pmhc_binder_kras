@@ -10,8 +10,8 @@ Chain conventions (truncated MHC input):
 
 Usage:
   python cms_scoring.py \
-      --pdb_dir /n/groups/marks/users/aaron/pmhc/round2/af2_filtered/ \
-      --out_csv  /n/groups/marks/users/aaron/pmhc/round2/cms_scores.tsv \
+      --pdb_dir ~/Desktop/pmhc_binder_kras/round2/af2_filtered/ \
+      --out_csv  ~/Desktop/pmhc_binder_kras/round2/cms_scores.tsv \
       --peptide_len 9 \
       --binder_chain A \
       --pmhc_chain B

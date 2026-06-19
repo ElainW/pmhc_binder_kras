@@ -17,9 +17,9 @@ Y-axis: binder residue position (0-indexed). True binder length read from
 
 Usage:
     python plot_af3_contacts.py \
-        --contacts_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/contacts/ \
-        --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
-        --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_design_stats.tsv
+        --contacts_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/contacts/ \
+        --epitopes_csv ~/Desktop/pmhc_binder_kras/post_filter/inputs/design_epitopes.csv \
+        --stats_tsv    ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_design_stats.tsv
 
     # Specific designs only:
     python plot_af3_contacts.py \

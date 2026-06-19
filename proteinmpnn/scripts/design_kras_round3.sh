@@ -8,9 +8,9 @@
 #SBATCH --error=../slurm/kras_r3.err
 
 # source activate mlfold
-PYTHON="/n/groups/marks/users/aaron/pmhc_cp/envs/proteinmpnn/bin/python"
+PYTHON="~/Desktop/pmhc_binder_kras_cp/envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-folder_with_pdbs="/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
+folder_with_pdbs="~/Desktop/pmhc_binder_kras_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
 input_dir="../input/kras_r3"
 output_dir="../outputs/kras_r3"
 

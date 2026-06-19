@@ -9,7 +9,7 @@
 #PYTHON=/n/groups/marks/software/anaconda_o2/envs/proteingym_env/bin/python
 PYTHON="/n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-folder_with_pdbs="/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered/rep/"
+folder_with_pdbs="~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered/rep/"
 input_dir="../input/kras"
 output_dir="../outputs/kras"
 

@@ -1,10 +1,10 @@
 #!/bin/bash
 module load conda/miniforge3/24.11.3-0
-mamba activate /n/groups/marks/users/aaron/pmhc/envs/esm
+mamba activate ~/Desktop/pmhc_binder_kras/envs/esm
 
-export model_checkpoint=/n/groups/marks/users/aaron/pmhc/specificity/ESMIF/inputs/esm_if1_gvp4_t16_142M_UR50.pt
+export model_checkpoint=~/Desktop/pmhc_binder_kras/specificity/ESMIF/inputs/esm_if1_gvp4_t16_142M_UR50.pt
 
-OUTPUT_DIR=/n/groups/marks/users/aaron/pmhc/specificity/ESMIF/outputs/r2/
+OUTPUT_DIR=~/Desktop/pmhc_binder_kras/specificity/ESMIF/outputs/r2/
 mkdir -p ${OUTPUT_DIR}
 
 python ${SCRIPT_DIR}/baselines/esm/compute_fitness_esm_if1.py \

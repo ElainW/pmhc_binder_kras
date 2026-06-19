@@ -12,8 +12,8 @@ so each SLURM array job runs exactly one design.
 
 Usage:
     python prepare_monomer_stubs.py \
-        --fasta   /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
-        --out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/stubs/
+        --fasta   ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_inputs.fasta \
+        --out_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/stubs/
 """
 
 from __future__ import annotations

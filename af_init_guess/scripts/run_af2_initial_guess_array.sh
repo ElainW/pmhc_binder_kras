@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --mem=10G
 #SBATCH -c 4
-#SBATCH -o /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.log
-#SBATCH -e /n/groups/marks/users/aaron/pmhc/af_init_guess/logs/af2_ig_kras_%a.err
+#SBATCH -o ~/Desktop/pmhc_binder_kras/af_init_guess/logs/af2_ig_kras_%a.log
+#SBATCH -e ~/Desktop/pmhc_binder_kras/af_init_guess/logs/af2_ig_kras_%a.err
 
 # -------------------------------------------------------
 # AF2 Initial Guess — SLURM array job (KRAS)
@@ -18,10 +18,10 @@
 
 # --- Environment ---
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/af2_binder_design
 
 # --- CUDA library paths (self-contained in conda env) ---
-export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib:~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:$LD_LIBRARY_PATH
 
 # --- Confirm GPU visible before running ---
 python -c "
@@ -40,10 +40,10 @@ if [ $? -ne 0 ]; then
 fi
 
 # --- Paths ---
-DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-CHUNK_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/kras_chunks"
-OUT_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/af2_kras"
-LOG_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/logs"
+DL_BINDER_DESIGN_DIR="~/Desktop/pmhc_binder_kras/dl_binder_design"
+CHUNK_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/inputs/kras_chunks"
+OUT_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/outputs/af2_kras"
+LOG_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/logs"
 
 # --- Per-job inputs/outputs based on array index ---
 SILENT_IN="${CHUNK_DIR}/chunk_${SLURM_ARRAY_TASK_ID}.silent"

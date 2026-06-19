@@ -5,8 +5,8 @@ for KRAS G12D VVGADGVGK alanine scan across all designs.
 
 Usage:
     python generate_mpnn_pepscan_csv.py \
-        --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --out_csv /n/groups/marks/users/aaron/pmhc/mpnn_spec/pepscan/pepscan_kras.csv
+        --pdb_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --out_csv ~/Desktop/pmhc_binder_kras/mpnn_spec/pepscan/pepscan_kras.csv
 """
 
 import os

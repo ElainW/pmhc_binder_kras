@@ -17,14 +17,14 @@ Adds two columns to an existing TSV (or outputs a new one):
 Usage:
     # Add columns to any existing TSV:
     python surface_hydrophobicity_resnums.py \
-        --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
-        --in_tsv          /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tmp \
-        --out_tsv         /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv
+        --relaxed_pdb_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
+        --in_tsv          ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list.tmp \
+        --out_tsv         ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv
 
     python surface_hydrophobicity_resnums.py \
-        --relaxed_pdb_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
-        --in_tsv          /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tmp \
-        --out_tsv         /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tsv
+        --relaxed_pdb_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/fastrelax_af3_nomsa/relaxed_pdbs/ \
+        --in_tsv          ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tmp \
+        --out_tsv         ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list_clean.tsv
 
     # Specific designs only:
     python surface_hydrophobicity_resnums.py \

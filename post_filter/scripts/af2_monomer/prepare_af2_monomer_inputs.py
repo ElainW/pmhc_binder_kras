@@ -9,14 +9,14 @@ Writes a combined FASTA file for AF2 monomer prediction.
 
 Usage:
     python prepare_af2_monomer_inputs.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta
+        --merged_scores ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --pdb_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/monomer_fasta
 
     python prepare_af2_monomer_inputs.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc_cp/specificity/analysis/r3/merged_scores_ranked.tsv \
-        --pdb_dir /n/groups/marks/users/aaron/pmhc_cp/af_init_guess/outputs/r3/af2_kras/top_pdbs/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r3/monomer_fasta
+        --merged_scores ~/Desktop/pmhc_binder_kras_cp/specificity/analysis/r3/merged_scores_ranked.tsv \
+        --pdb_dir ~/Desktop/pmhc_binder_kras_cp/af_init_guess/outputs/r3/af2_kras/top_pdbs/ \
+        --out_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r3/monomer_fasta
 """
 
 import os

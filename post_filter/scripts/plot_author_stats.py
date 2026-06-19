@@ -20,11 +20,11 @@ metrics are known to be anomalous (ipSAE, and noted in secondary structure).
 
 Usage:
     python plot_author_stats.py \
-        --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_design_stats.tsv \
-        --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_hotspots.csv \
-        --xlsx         /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
-        --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
-        --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/plots/
+        --stats_tsv    ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_design_stats.tsv \
+        --epitopes_csv ~/Desktop/pmhc_binder_kras/post_filter/inputs/design_hotspots.csv \
+        --xlsx         ~/Desktop/pmhc_binder_kras/post_filter/inputs/science.adv0185_data_s1.csv \
+        --plddt_tsv    ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
+        --out_dir      ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/plots/
 """
 
 import os

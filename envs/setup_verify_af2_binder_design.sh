@@ -1,8 +1,8 @@
 conda activate af2_binder_design
 
 # Symlink PyRosetta from dl_binder_design
-DEST="/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages"
-SRC="/n/groups/marks/users/aaron/pmhc/envs/dl_binder_design/lib/python3.11/site-packages"
+DEST="~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages"
+SRC="~/Desktop/pmhc_binder_kras/envs/dl_binder_design/lib/python3.11/site-packages"
 ln -s ${SRC}/pyrosetta ${DEST}/pyrosetta
 ln -s ${SRC}/rosetta ${DEST}/rosetta
 ln -s "${SRC}/pyrosetta-2026.3+releasequarterly.5e498f1409.dist-info" \

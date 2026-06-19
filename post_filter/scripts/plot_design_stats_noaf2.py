@@ -19,11 +19,11 @@ For hbonds_int and delta_unsatHbonds (plot 03) and buns_delta_unsat (plot 04):
 
 Usage:
     python plot_design_stats.py \
-        --stats_tsv       /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_design_stats.tsv \
-        --epitopes_csv    /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/design_epitopes.csv \
-        --sequences       /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
-        --specificity_tsv /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_plots/
+        --stats_tsv       ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3_design_stats.tsv \
+        --epitopes_csv    ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/design_epitopes.csv \
+        --sequences       ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
+        --specificity_tsv ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --out_dir         ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3_plots/
 """
 
 import os

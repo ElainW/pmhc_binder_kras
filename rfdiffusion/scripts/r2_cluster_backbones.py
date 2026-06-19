@@ -17,15 +17,15 @@ Usage
 -----
 # Dry run first to see clustering without copying files:
 python r2_cluster_backbones.py \
-    --input_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered \
-    --output_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/clustered \
+    --input_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/filtered \
+    --output_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/clustered \
     --rmsd_cutoff 2.0 \
     --dry_run
 
 # Full run:
 python r2_cluster_backbones.py \
-    --input_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered \
-    --output_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/clustered \
+    --input_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/filtered \
+    --output_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/clustered \
     --rmsd_cutoff 2.0
 """
 

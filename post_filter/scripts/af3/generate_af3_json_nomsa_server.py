@@ -2,11 +2,11 @@
 """
 Usage:
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/dl_binder_design
 
 python generate_af3_json_nomsa_server.py \
-    --fasta /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/binder_pMHC_full.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af3_nomsa \
+    --fasta ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/binder_pMHC_full.fasta \
+    --output_json_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af3_nomsa \
     --peptide_chain C
 
 Generate AlphaFold3 server JSON input files from a multi-chain FASTA file.

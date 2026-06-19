@@ -39,10 +39,10 @@ Output TSV columns:
 
 Usage:
     python align_af2_monomer_to_af3.py \
-        --af3_out_dir  /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
-        --af2_mono_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/ \
-        --out_tsv      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af2_af3_rmsd.tsv \
-        --superposed_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af2_af3_superimposed_pdb/
+        --af3_out_dir  ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3/ \
+        --af2_mono_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af2_monomer/ \
+        --out_tsv      ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af2_af3_rmsd.tsv \
+        --superposed_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af2_af3_superimposed_pdb/
 
     # Specific designs only:
     python align_af2_monomer_to_af3.py \

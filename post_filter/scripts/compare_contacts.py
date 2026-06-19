@@ -7,9 +7,9 @@ after FastRelax. Stable contacts = higher confidence hits for Round 3.
 
 Usage:
     python compare_contacts.py \
-        --relaxed   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_relaxed/contact_summary.tsv \
-        --unrelaxed /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/contact_unrelaxed/contact_summary.tsv \
-        --out_dir   /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
+        --relaxed   ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/contact_relaxed/contact_summary.tsv \
+        --unrelaxed ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/contact_unrelaxed/contact_summary.tsv \
+        --out_dir   ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/
 """
 
 import os

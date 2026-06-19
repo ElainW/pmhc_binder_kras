@@ -1,10 +1,10 @@
-PYTHON_ENV="/n/groups/marks/users/aaron/pmhc_cp/envs/dl_binder_design/bin/python"
-MPNN_ENV="/n/groups/marks/users/aaron/pmhc_cp/envs/proteinmpnn/bin/python"
+PYTHON_ENV="~/Desktop/pmhc_binder_kras_cp/envs/dl_binder_design/bin/python"
+MPNN_ENV="~/Desktop/pmhc_binder_kras_cp/envs/proteinmpnn/bin/python"
 PROTEINMPNN_SCRIPT_DIR="/n/groups/marks/users/aaron/enzymes/ProteinMPNN"
-SCRIPT="/n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/scripts/redesign_w_charge_residue_filter_parallel.py"
+SCRIPT="~/Desktop/pmhc_binder_kras_cp/proteinmpnn/scripts/redesign_w_charge_residue_filter_parallel.py"
 
-PDB_DIR="/n/groups/marks/users/aaron/pmhc_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
-OUTPUT_DIR="/n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/kras_r3"
+PDB_DIR="~/Desktop/pmhc_binder_kras_cp/rfdiffusion/outputs/kras/partial_r3/clustered"
+OUTPUT_DIR="~/Desktop/pmhc_binder_kras_cp/proteinmpnn/outputs/kras_r3"
 DESIGN_LIST="${OUTPUT_DIR}/design_list.txt"
 
 # Full workflow — run Steps 1, 3, 4 interactively; only Step 2 via sbatch.

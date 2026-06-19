@@ -1,17 +1,17 @@
 #!/bin/bash
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/dl_binder_design
 
-mkdir -p /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/
+mkdir -p ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/r2/
 
 python thread_fasta_to_backbones.py \
-    --fasta_dir /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/kras_r2/seqs/ \
-    --backbone_dir /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered/ \
-    --output_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/threaded_pdbs/ \
+    --fasta_dir ~/Desktop/pmhc_binder_kras/proteinmpnn/outputs/kras_r2/seqs/ \
+    --backbone_dir ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/filtered/ \
+    --output_dir ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/r2/threaded_pdbs/ \
     --verify \
     --verbose
 
-/n/groups/marks/users/aaron/pmhc/silent_tools/silentfrompdbs /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/threaded_pdbs/*.pdb > /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/threaded_kras_designs.silent
+~/Desktop/pmhc_binder_kras/silent_tools/silentfrompdbs ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/r2/threaded_pdbs/*.pdb > ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/r2/threaded_kras_designs.silent
 
 python split_silent.py \
     --silent ../inputs/r2/threaded_kras_designs.silent \
@@ -20,4 +20,4 @@ python split_silent.py \
 
 # Verify chunks have 2 chains
 grep "RES_NUM" \
-    /n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/r2/kras_chunks/chunk_0.silent | head -3
+    ~/Desktop/pmhc_binder_kras/af_init_guess/inputs/r2/kras_chunks/chunk_0.silent | head -3

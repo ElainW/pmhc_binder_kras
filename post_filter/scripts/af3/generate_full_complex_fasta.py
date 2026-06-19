@@ -9,20 +9,20 @@ and writes a 4-chain FASTA for each design:
   C = KRAS G12D peptide (VVGADGVGK)
   D = B2M
 
-Output: /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta
+Output: ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/binder_pMHC_full.fasta
 
 Usage:
-    python /n/groups/marks/users/aaron/pmhc/post_filter/scripts/af3/generate_full_complex_fasta.py \
-        --csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
-        --out /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta
+    python ~/Desktop/pmhc_binder_kras/post_filter/scripts/af3/generate_full_complex_fasta.py \
+        --csv ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/monomer_fasta/af2_monomer_sequences.csv \
+        --out ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/binder_pMHC_full.fasta
 
-    python /n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts/af3/generate_full_complex_fasta.py \
-        --csv /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_sequences.csv \
-        --out /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r2.5/binder_pMHC_full.fasta
+    python ~/Desktop/pmhc_binder_kras_cp/post_filter/scripts/af3/generate_full_complex_fasta.py \
+        --csv ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/af2_monomer/af2_monomer_sequences.csv \
+        --out ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r2.5/binder_pMHC_full.fasta
 
-    python /n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts/af3/generate_full_complex_fasta.py \
-        --csv /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r3/monomer_fasta/af2_monomer_sequences.csv \
-        --out /n/groups/marks/users/aaron/pmhc_cp/post_filter/inputs/r3/binder_pMHC_full.fasta
+    python ~/Desktop/pmhc_binder_kras_cp/post_filter/scripts/af3/generate_full_complex_fasta.py \
+        --csv ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r3/monomer_fasta/af2_monomer_sequences.csv \
+        --out ~/Desktop/pmhc_binder_kras_cp/post_filter/inputs/r3/binder_pMHC_full.fasta
 """
 
 import argparse

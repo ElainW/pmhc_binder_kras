@@ -2,10 +2,10 @@
 
 # --- Environment ---
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/af2_binder_design
 
 # --- CUDA library paths (self-contained in conda env) ---
-export LD_LIBRARY_PATH=/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cudnn/lib:~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib:~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/site-packages/nvidia/cusolver/lib:$LD_LIBRARY_PATH
 
 # --- Confirm GPU visible before running ---
 python -c "
@@ -24,10 +24,10 @@ if [ $? -ne 0 ]; then
 fi
 
 # --- Paths ---
-DL_BINDER_DESIGN_DIR="/n/groups/marks/users/aaron/pmhc/dl_binder_design"
-PDB_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/inputs/examples"
-OUT_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/examples"
-LOG_DIR="/n/groups/marks/users/aaron/pmhc/af_init_guess/logs_examples"
+DL_BINDER_DESIGN_DIR="~/Desktop/pmhc_binder_kras/dl_binder_design"
+PDB_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/inputs/examples"
+OUT_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/outputs/examples"
+LOG_DIR="~/Desktop/pmhc_binder_kras/af_init_guess/logs_examples"
 
 # --- Per-job inputs/outputs based on array index ---
 PDB_IN="${PDB_DIR}/extracted_9O5S_reordered.pdb" # run reorder script first

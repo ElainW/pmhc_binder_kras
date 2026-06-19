@@ -1,11 +1,11 @@
 #!/bin/bash
-cd /n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/software/mpnn/
-PYTHON="/n/groups/marks/users/aaron/pmhc/envs/proteinmpnn/bin/python"
-folder_with_pdbs="/n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/"
-pepscan_csv="/n/groups/marks/users/aaron/pmhc/specificity/ProteinMPNN_ala/inputs/pepscan_kras.csv"
-DIR="/n/groups/marks/users/aaron/pmhc/specificity/ProteinMPNN_ala/"
+cd ~/Desktop/pmhc_binder_kras/pMHCI_binder_design/software/mpnn/
+PYTHON="~/Desktop/pmhc_binder_kras/envs/proteinmpnn/bin/python"
+folder_with_pdbs="~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/"
+pepscan_csv="~/Desktop/pmhc_binder_kras/specificity/ProteinMPNN_ala/inputs/pepscan_kras.csv"
+DIR="~/Desktop/pmhc_binder_kras/specificity/ProteinMPNN_ala/"
 
-/n/groups/marks/users/aaron/pmhc/envs/dl_binder_design/bin/python ${DIR}/scripts/generate_mpnn_pepscan_csv.py \
+~/Desktop/pmhc_binder_kras/envs/dl_binder_design/bin/python ${DIR}/scripts/generate_mpnn_pepscan_csv.py \
     --pdb_dir ${folder_with_pdbs} \
     --out_csv ${pepscan_csv}
 

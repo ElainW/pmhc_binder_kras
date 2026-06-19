@@ -20,8 +20,8 @@ Outputs:
 
 Usage:
     python collect_monomer_scores.py \
-        --monomer_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/ \
-        --out_dir         /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/
+        --monomer_out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af2_monomer/ \
+        --out_dir         ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af2_monomer/stats/
 """
 
 import os

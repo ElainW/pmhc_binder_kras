@@ -1,5 +1,5 @@
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/dl_binder_design
 
 DIR=~/Desktop/pmhc_binder_kras/post_filter
 # for authors' designs

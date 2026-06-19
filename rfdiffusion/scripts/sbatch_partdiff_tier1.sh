@@ -29,8 +29,8 @@ set -euo pipefail
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
-R1_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
-R2_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2
+R1_PDB_DIR=~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
+R2_OUT_ROOT=~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
 BACKBONES=(247 34 47 255 260 83 158)
 PARTIAL_T=12

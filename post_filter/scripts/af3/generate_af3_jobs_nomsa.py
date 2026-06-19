@@ -2,29 +2,29 @@
 """
 Usage:
 module load conda/miniforge3/24.11.3-0
-conda activate /n/groups/marks/users/aaron/pmhc/envs/dl_binder_design
+conda activate ~/Desktop/pmhc_binder_kras/envs/dl_binder_design
 
 python generate_af3_jobs_nomsa.py \
-    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3 \
-    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
-    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --fasta ~/Desktop/pmhc_binder_kras/post_filter/inputs/author_design_stats/author_binder_pMHC.fasta \
+    --output_json_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/author_design_stats/af3 \
+    --output_prediction_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3/ \
+    --output_slurm_dir ~/Desktop/pmhc_binder_kras/post_filter/slurm/ \
     --peptide_chain C \
     --skip ctnnb1-15 gp100-3 hiv-9 hiv-10 mage-4 mage-282 mage-513 mart1-3 mart1-43 pap-116 phox2b-5 phox2b-11 sars-6 wt1-5 wt1-8 yfv-2
 
 python generate_af3_jobs_nomsa.py \
-    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/author_binder_pMHC_full.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/author_design_stats/af3_nomsa \
-    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_nomsa/ \
-    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --fasta ~/Desktop/pmhc_binder_kras/post_filter/inputs/author_design_stats/author_binder_pMHC_full.fasta \
+    --output_json_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/author_design_stats/af3_nomsa \
+    --output_prediction_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3_nomsa/ \
+    --output_slurm_dir ~/Desktop/pmhc_binder_kras/post_filter/slurm/ \
     --peptide_chain C \
     --skip ctnnb1-15 mart1-3 mart1-43 pap-116 phox2b-5
 
 python generate_af3_jobs_nomsa.py \
-    --fasta /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/binder_pMHC_full.fasta \
-    --output_json_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/af3_nomsa \
-    --output_prediction_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3_nomsa/ \
-    --output_slurm_dir /n/groups/marks/users/aaron/pmhc/post_filter/slurm/ \
+    --fasta ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/binder_pMHC_full.fasta \
+    --output_json_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/af3_nomsa \
+    --output_prediction_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3_nomsa/ \
+    --output_slurm_dir ~/Desktop/pmhc_binder_kras/post_filter/slurm/ \
     --peptide_chain C \
     --skip orient_158_pt12__64_sample01 orient_158_pt12__76_sample04 orient_158_pt12__76_sample07 orient_252_pt20__31_sample01 orient_252_pt20__31_sample04 orient_252_pt20__31_sample06 orient_255_pt12__0_sample02 orient_255_pt12__11_sample07 orient_255_pt12__14_sample06 orient_255_pt12__15_sample01 orient_255_pt12__17_sample03 orient_255_pt12__18_sample01 orient_255_pt12__21_sample01 orient_255_pt12__21_sample07 orient_255_pt12__27_sample02 orient_255_pt12__27_sample03 orient_255_pt12__27_sample04
 

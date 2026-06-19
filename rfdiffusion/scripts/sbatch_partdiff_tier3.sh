@@ -29,8 +29,8 @@ set -euo pipefail
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PYTHON=/n/groups/marks/users/aaron/RFdiffusion/env/SE3nv/bin/python
 SCRIPT=/n/groups/marks/users/aaron/RFdiffusion/scripts/run_inference.py
-R1_PDB_DIR=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
-R2_OUT_ROOT=/n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2
+R1_PDB_DIR=~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/1000_filtered/orientation_filtered
+R2_OUT_ROOT=~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2
 # ── Tier 1 settings ───────────────────────────────────────────────────────────
 BACKBONES=(166 324 95 51 348 74 187 258 342 210) # additional backbones that look borderline ok from ipSAE minus duplicate from other tiers
 PARTIAL_T=25

@@ -21,9 +21,9 @@ auto-detected from the CIF.
 
 Usage:
     python fastrelax_designs_af3_server.py \
-        --af3_out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/af3_nomsa/ \
-        --out_dir     /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2.5/fastrelax_af3/ \
-        --dalphaball  /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
+        --af3_out_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2.5/af3_nomsa/ \
+        --out_dir     ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2.5/fastrelax_af3/ \
+        --dalphaball  ~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc \
         --n_repeats   3
 
     # Run on specific designs:
@@ -318,7 +318,7 @@ def main():
     parser.add_argument('--inspect',     metavar='DESIGN',
         help='Inspect chain layout of one design and exit')
     parser.add_argument('--dalphaball',
-        default='/n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc',
+        default='~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc',
         help='Path to DAlphaBall binary')
     args = parser.parse_args()
 

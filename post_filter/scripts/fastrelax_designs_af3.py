@@ -43,15 +43,15 @@ Additional surface hydrophobicity score (BindCraft-equivalent):
 
 Usage:
     python fastrelax_af3.py \
-        --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3/ \
-        --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/fastrelax_af3/ \
-        --dalphaball  /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
+        --af3_out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/af3/ \
+        --out_dir     ~/Desktop/pmhc_binder_kras/post_filter/outputs/author_design_stats/fastrelax_af3/ \
+        --dalphaball  ~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc \
         --n_repeats   3
 
     python fastrelax_af3.py \
-        --af3_out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af3/ \
-        --out_dir     /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax_af3/ \
-        --dalphaball  /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc \
+        --af3_out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/af3/ \
+        --out_dir     ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/fastrelax_af3/ \
+        --dalphaball  ~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc \
         --n_repeats   3
 
     # Run on a specific list of designs:

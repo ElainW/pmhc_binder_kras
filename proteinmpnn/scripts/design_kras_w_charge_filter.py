@@ -10,8 +10,8 @@ max_attempts is reached.
 Usage
 -----
 python run_mpnn_with_charge_filter.py \
-    --pdb_dir       /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r2/filtered \
-    --out_dir       /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r3 \
+    --pdb_dir       ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r2/filtered \
+    --out_dir       ~/Desktop/pmhc_binder_kras/proteinmpnn/outputs/r3 \
     --mpnn_path     /path/to/python \
     --mpnn_script   /path/to/ProteinMPNN/protein_mpnn_run.py \
     --n_seqs        8 \

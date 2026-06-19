@@ -8,10 +8,10 @@ Generates:
 
 Usage:
     python generate_pmhc_fold_csvs.py \
-        --pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --wt_chainB /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/extracted_8I5E.pdb \
-        --off_target_pdb_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/
+        --pdb_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --wt_chainB ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/extracted_8I5E.pdb \
+        --off_target_pdb_dir ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/r2/
 """
 
 import os

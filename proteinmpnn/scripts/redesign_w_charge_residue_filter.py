@@ -54,17 +54,17 @@ ProteinMPNN pipeline (helper-script variant):
 
 Usage -- Mode A:
     python redesign_w_charge_residue_filter.py \
-        --pdb_dir   /n/groups/marks/users/aaron/pmhc/rfdiffusion/outputs/kras/partial_r3/ \
-        --out_dir   /n/groups/marks/users/aaron/pmhc/proteinmpnn/outputs/r3/ \
+        --pdb_dir   ~/Desktop/pmhc_binder_kras/rfdiffusion/outputs/kras/partial_r3/ \
+        --out_dir   ~/Desktop/pmhc_binder_kras/proteinmpnn/outputs/r3/ \
         --mpnn_path /n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python \
         --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py
 
 Usage -- Mode B (r2.5 redesign):
-    export PYTHONPATH="/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
+    export PYTHONPATH="~/Desktop/pmhc_binder_kras_cp/post_filter/scripts:$PYTHONPATH"
     python redesign_w_charge_residue_filter.py \
-        --audit_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv \
-        --af3_out_dir /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/ \
-        --out_dir     /n/groups/marks/users/aaron/pmhc_cp/proteinmpnn/outputs/r2.5/ \
+        --audit_tsv   ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list.tsv \
+        --af3_out_dir ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/af3_nomsa/ \
+        --out_dir     ~/Desktop/pmhc_binder_kras_cp/proteinmpnn/outputs/r2.5/ \
         --mpnn_path /n/groups/marks/projects/marks_lab_and_oatml/ProteinGym2/model_envs/proteinmpnn/bin/python \
         --mpnn_script /n/groups/marks/users/aaron/enzymes/ProteinMPNN/protein_mpnn_run.py \
         --n_seqs 8 --max_charge -3 --max_attempts 10 \
@@ -699,7 +699,7 @@ def main():
             raise ImportError(
                 "fastrelax_designs_af3.py must be on sys.path. "
                 "Add its directory to PYTHONPATH, e.g.:\n"
-                "  export PYTHONPATH=/n/groups/marks/users/aaron/pmhc_cp/post_filter/scripts:$PYTHONPATH"
+                "  export PYTHONPATH=~/Desktop/pmhc_binder_kras_cp/post_filter/scripts:$PYTHONPATH"
     ) from _e
         if not args.af3_out_dir:
             raise ValueError('--af3_out_dir is required with --audit_tsv (Mode B)')

@@ -16,10 +16,10 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 
 Usage:
     python charge_cysteine_audit.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/
+        --merged_scores ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --split_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \
+        --dalphaball ~/Desktop/pmhc_binder_kras/post_filter/scripts/DAlphaBall.gcc \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/
 """
 
 import os

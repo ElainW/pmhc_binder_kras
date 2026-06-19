@@ -35,10 +35,10 @@ Additional surface hydrophobicity score (BindCraft-equivalent):
 
 Usage:
     python fastrelax_designs.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/fastrelax/ \
-        --dalphaball /n/groups/marks/users/aaron/pmhc/post_filter/scripts/DAlphaBall.gcc \
+        --merged_scores ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --split_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2/fastrelax/ \
+        --dalphaball ~/Desktop/pmhc_binder_kras/post_filter/scripts/DAlphaBall.gcc \
         --n_repeats 3
 """
 
@@ -310,9 +310,9 @@ def main():
     parser.add_argument('--out_dir',       required=True)
     parser.add_argument('--n_repeats',     type=int, default=3)
     parser.add_argument('--dalphaball',
-                        default='/n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc',
+                        default='~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc',
                         help='Path to DAlphaBall binary for BuriedUnsatHbonds SASA calculation '
-                             '(default: /n/groups/marks/users/aaron/pmhc/post_filter/scripts/dalphaball.gcc)')
+                             '(default: ~/Desktop/pmhc_binder_kras/post_filter/scripts/dalphaball.gcc)')
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)

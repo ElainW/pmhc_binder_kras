@@ -9,10 +9,10 @@ On-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_on \
         --round r2 \
-        --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
+        --script ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGADGVGK \
-        --minib_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --minib_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
         --structs_per_job 20 \
         --t 01:30:00
 
@@ -20,10 +20,10 @@ Off-target example:
     python batch_pMHC_fold_o2.py \
         --prefix pmhc_fold_off \
         --round r2 \
-        --script /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/scripts/pmhc_fold.py \
+        --script ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/scripts/pmhc_fold.py \
         --alleles "A*11:01" \
         --peptides VVGAGGVGK \
-        --minib_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
+        --minib_dir ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/r2/off_target_pdbs/ \
         --structs_per_job 20 \
         --t 01:30:00
 """
@@ -73,33 +73,33 @@ def extract_protein_sequences(pdb_file):
 # ── Constants ─────────────────────────────────────────────────────────────────
 
 MODEL_WEIGHTS = (
-    "/n/groups/marks/users/aaron/pmhc_cp/pMHCI_binder_design/pMHC_fold/"
+    "~/Desktop/pmhc_binder_kras_cp/pMHCI_binder_design/pMHC_fold/"
     "datasets_alphafold_finetune/params/"
     "mixed_mhc_pae_run6_af_mhc_params_20640.pkl"
 )
 
 ALIGNMENT_CSV = (
-    "/n/groups/marks/users/aaron/pmhc/pMHCI_binder_design/pMHC_fold/"
+    "~/Desktop/pmhc_binder_kras/pMHCI_binder_design/pMHC_fold/"
     "alignments_all_alleles_vs_pdb_June29_2024.csv"
 )
 
 CONDA_SETUP = (
     "module load conda/miniforge3/24.11.3-0 && "
     "source $(conda info --base)/etc/profile.d/conda.sh && "
-    "conda activate /n/groups/marks/users/aaron/pmhc/envs/af2_binder_design"
+    "conda activate ~/Desktop/pmhc_binder_kras/envs/af2_binder_design"
 )
 
 LD_LIBRARY = (
-    "/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/"
+    "~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/"
     "site-packages/nvidia/cudnn/lib:"
-    "/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib:"
-    "/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/lib/python3.11/"
+    "~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib:"
+    "~/Desktop/pmhc_binder_kras/envs/af2_binder_design/lib/python3.11/"
     "site-packages/nvidia/cusolver/lib"
 )
 
-PYTHON = "/n/groups/marks/users/aaron/pmhc/envs/af2_binder_design/bin/python"
+PYTHON = "~/Desktop/pmhc_binder_kras/envs/af2_binder_design/bin/python"
 
-MHC_DIR = "/n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/inputs/pmhc_pdbs"
+MHC_DIR = "~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/inputs/pmhc_pdbs"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 

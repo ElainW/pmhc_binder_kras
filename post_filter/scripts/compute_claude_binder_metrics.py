@@ -17,8 +17,8 @@ Output: TSV with one row per design.
 
 Usage:
     python compute_binder_metrics.py \\
-        --input_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \\
-        --output_tsv /n/groups/marks/users/aaron/pmhc/post_filter/analysis/r2/binder_metrics.tsv \\
+        --input_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \\
+        --output_tsv ~/Desktop/pmhc_binder_kras/post_filter/analysis/r2/binder_metrics.tsv \\
         [--pattern "*.pdb"] \\
         [--min_helix_length 4]
 """

@@ -28,10 +28,10 @@ Output:
 
 Usage:
     python collect_redesign_candidates.py \
-        --tier1_tsv           /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/tier1.tsv \
-        --redesign_cand_tsv   /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_candidate.tsv \
-        --audit_tsv           /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/af3_nomsa/af3_design_stats.tsv \
-        --out_path            /n/groups/marks/users/aaron/pmhc_cp/post_filter/outputs/r2/prioritization/redesign_list.tmp
+        --tier1_tsv           ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/tier1.tsv \
+        --redesign_cand_tsv   ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_candidate.tsv \
+        --audit_tsv           ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/af3_nomsa/af3_design_stats.tsv \
+        --out_path            ~/Desktop/pmhc_binder_kras_cp/post_filter/outputs/r2/prioritization/redesign_list.tmp
 """
 
 import os

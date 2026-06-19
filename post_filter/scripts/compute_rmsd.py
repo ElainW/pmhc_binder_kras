@@ -22,10 +22,10 @@ pMHC fold binder (chain Z) overlays the AF2 init guess binder (chain A).
 
 Usage:
     python compute_rmsd.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --af2_pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --split_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/ \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2
+        --merged_scores ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --af2_pdb_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --split_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/ \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/outputs/r2
 """
 
 from __future__ import annotations

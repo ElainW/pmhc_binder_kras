@@ -15,10 +15,10 @@ Output structure per design:
 
 Usage:
     python split_pmhc_fold_pdbs.py \
-        --merged_scores /n/groups/marks/users/aaron/pmhc/specificity/analysis/r2/merged_scores_ranked.tsv \
-        --af2_pdb_dir /n/groups/marks/users/aaron/pmhc/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
-        --pmhc_fold_dir /n/groups/marks/users/aaron/pmhc/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
-        --out_dir /n/groups/marks/users/aaron/pmhc/post_filter/inputs/r2/
+        --merged_scores ~/Desktop/pmhc_binder_kras/specificity/analysis/r2/merged_scores_ranked.tsv \
+        --af2_pdb_dir ~/Desktop/pmhc_binder_kras/af_init_guess/outputs/r2/af2_kras/top_pdbs/ \
+        --pmhc_fold_dir ~/Desktop/pmhc_binder_kras/specificity/pMHC_fold/outputs/r2/pmhc_fold_on_runs \
+        --out_dir ~/Desktop/pmhc_binder_kras/post_filter/inputs/r2/
 """
 
 import os
