@@ -21,7 +21,7 @@ metrics are known to be anomalous (ipSAE, and noted in secondary structure).
 Usage:
     python plot_author_stats.py \
         --stats_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/af3_design_stats.tsv \
-        --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_epitopes.csv \
+        --epitopes_csv /n/groups/marks/users/aaron/pmhc/post_filter/inputs/design_hotspots.csv \
         --xlsx         /n/groups/marks/users/aaron/pmhc/post_filter/inputs/science.adv0185_data_s1.csv \
         --plddt_tsv    /n/groups/marks/users/aaron/pmhc/post_filter/outputs/r2/af2_monomer/stats/monomer_scores_authors.tsv \
         --out_dir      /n/groups/marks/users/aaron/pmhc/post_filter/outputs/author_design_stats/plots/
@@ -48,6 +48,11 @@ BINDCRAFT_THRESHOLDS = {
     'interface_n_K':          3,
     'interface_n_M':          3,
 }
+
+def norm_design(name: str) -> str:
+    """Normalize design name to hyphen form for CSV lookups (e.g. ctnnb1_15 -> ctnnb1-15)."""
+    return name.replace('_', '-')
+
 
 def net_charge(seq: str) -> float:
     return (seq.count('R') + seq.count('K') + 0.1 * seq.count('H')
@@ -380,50 +385,57 @@ def plot_cms_heatmap(df_stats: pd.DataFrame, df_epi: pd.DataFrame,
         for _, row in df_epi.iterrows()
     }
 
-    cms_cols_all = sorted(
-        [c for c in df_stats.columns if c.startswith('cms_p') and c[5:].isdigit()],
-        key=lambda x: int(x[5:])
-    )
-    max_pep = max(int(c[5:]) for c in cms_cols_all)
+    # Always show 10 columns; 9-mers leave position 10 blank
+    N_COLS = 10
 
     df = df_stats.dropna(subset=['cms_p1']).copy()
-    df = df.merge(df_epi[['design', 'target_name', 'peptide_len']],
-                  on='design', how='left')
-    df = df.sort_values(['target_name', 'design'])
+    # Normalize design names (underscore → hyphen) for merging with CSV files
+    df['design_norm'] = df['design'].apply(norm_design)
+    df_epi_norm = df_epi.copy()
+    df_epi_norm['design_norm'] = df_epi_norm['design']
+    df = df.merge(df_epi_norm[['design_norm', 'target_name', 'peptide_len']],
+                  on='design_norm', how='left')
+    df = df.sort_values(['target_name', 'design_norm'])
     n_designs = len(df)
 
-    fig, ax = plt.subplots(figsize=(max_pep * 0.3 + 3, n_designs * 0.3 + 2))
+    fig, ax = plt.subplots(figsize=(N_COLS * 0.3 + 3, n_designs * 0.3 + 2))
 
-    mat = np.zeros((n_designs, max_pep))
+    mat = np.full((n_designs, N_COLS), np.nan)
     for i, (_, row) in enumerate(df.iterrows()):
-        for j in range(1, max_pep + 1):
+        for j in range(1, N_COLS + 1):
             col = f'cms_p{j}'
             if col in row and not pd.isna(row[col]):
                 mat[i, j - 1] = row[col]
 
-    im = ax.imshow(mat, aspect='auto', cmap='YlOrRd', origin='upper',
+    # Mask NaN (empty positions for 9-mers) so they render as white
+    masked = np.ma.masked_invalid(mat)
+    cmap = plt.cm.YlOrRd.copy()
+    cmap.set_bad(color='white')
+    im = ax.imshow(masked, aspect='auto', cmap=cmap, origin='upper',
                    interpolation='nearest')
     plt.colorbar(im, ax=ax, fraction=0.02, pad=0.02, label='CMS score')
 
     ylabels = [design_label(d) for d in df['design']]
     ax.set_yticks(range(n_designs))
     ax.set_yticklabels(ylabels, fontsize=8)
-    ax.set_xticks(range(max_pep))
-    ax.set_xticklabels([f'p{i+1}' for i in range(max_pep)], fontsize=9)
+    ax.set_xticks(range(N_COLS))
+    ax.set_xticklabels([f'p{i+1}' for i in range(N_COLS)], fontsize=9)
     ax.set_xlabel('Peptide position', fontsize=11)
 
     for i, (_, row) in enumerate(df.iterrows()):
-        peptide = pep_map.get(row['design'], '')
-        for j in range(len(peptide)):
+        peptide = pep_map.get(norm_design(row['design']), '')
+        for j in range(min(len(peptide), N_COLS)):
             val = mat[i, j]
-            txt_color = 'white' if val > mat.max() * 0.6 else 'black'
+            if np.isnan(val):
+                continue
+            txt_color = 'white' if val > np.nanmax(mat) * 0.6 else 'black'
             ax.text(j, i, peptide[j], ha='center', va='center',
                     fontsize=6, color=txt_color, fontweight='bold')
 
     for i, (_, row) in enumerate(df.iterrows()):
-        for pos in hotspot_map.get(row['design'], []):
+        for pos in hotspot_map.get(norm_design(row['design']), []):
             j = pos - 1
-            if 0 <= j < max_pep:
+            if 0 <= j < N_COLS:
                 ax.add_patch(plt.Rectangle(
                     (j - 0.5, i - 0.5), 1, 1,
                     fill=False, edgecolor='royalblue', lw=1.5
@@ -450,8 +462,10 @@ def plot_cms_heatmap(df_stats: pd.DataFrame, df_epi: pd.DataFrame,
 def plot_plddt_ipsae(df_plddt: pd.DataFrame, df_stats: pd.DataFrame,
                      out_path: str):
     df_plddt = df_plddt.copy()
-    df_plddt['design'] = df_plddt['description'].str.replace('^author_', '',
-                                                              regex=True)
+    # Strip 'author_' prefix and normalize hyphens to underscores to match stats TSV
+    df_plddt['design'] = (df_plddt['description']
+                          .str.replace('^author_', '', regex=True)
+                          .str.replace('-', '_'))
     df = df_plddt.merge(
         df_stats[['design', 'ipsae_binder_peptide', 'ipsae_n_contacts',
                   'af3_iptm', 'af3_ranking_score']],
@@ -518,7 +532,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--stats_tsv',    required=True, help='af3_design_stats.tsv')
-    parser.add_argument('--epitopes_csv', required=True, help='design_epitopes.csv')
+    parser.add_argument('--epitopes_csv', required=True,
+        help='design_hotspots.csv (peptide sequences, target names, hotspot positions)')
     parser.add_argument('--xlsx',         required=True,
         help='science_adv0185_data_s1.csv (binder sequences)')
     parser.add_argument('--plddt_tsv',    required=True,
