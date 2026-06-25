@@ -190,6 +190,16 @@ def predict_structure(prefix, feature_dict, do_relax=True, random_seed=0):
         if any(str(m) in model_name for m in [3,4,5]): model_runner = model_runner_3
         model_runner.params = params
 
+        # FIX: crop_size defaults to 256 (alphafold/model/config.py:124) and is never                                                                     
+        # overridden anywhere in this script. Since our queries (binder+MHC+peptide)                                                                      
+        # routinely run 270-390 residues, AF2's random_crop_to_size silently crops the                                                                 
+        # complex down to 256 residues at random -- it can drop the peptide or large                                                                      
+        # chunks of the binder/MHC depending on where the random window lands.                                                                            
+        # Setting crop_size = the exact query length disables cropping (crop only                                                                         
+        # triggers when actual length > crop_size) without introducing any padding. 
+        num_res = len(feature_dict['aatype'])
+        model_runner.config.data.eval.crop_size = num_res
+
         processed_feature_dict = model_runner.process_features(feature_dict, random_seed=random_seed)
         prediction_result = model_runner.predict(processed_feature_dict, random_seed=random_seed)
         prediction_result_dict[model_name] = prediction_result
