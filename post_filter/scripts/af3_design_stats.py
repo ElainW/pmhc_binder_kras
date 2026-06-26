@@ -448,7 +448,6 @@ def _contacts_summary(
     Shared by compute_contacts_from_pose (pose path) and process_design
     (direct relaxed PDB path) to avoid duplicating logic.
     """
-    SALT_BRIDGE_AA = {'R', 'K'}
     n_pep = len(pep_res)
 
     def _per_pos(contacts):
@@ -459,10 +458,30 @@ def _contacts_summary(
                 counts[pi] += 1
         return counts
 
+    def _per_pos_filtered(contacts, pred):
+        """Per-position counts restricted to contacts where pred(item) is True."""
+        counts = [0] * n_pep
+        for item in contacts:
+            if not pred(item):
+                continue
+            pi = item['pi'] if isinstance(item, dict) else item[1]
+            if 0 <= pi < n_pep:
+                counts[pi] += 1
+        return counts
+
     all_pp   = _per_pos(all_cts)
     polar_pp = _per_pos(polar_cts)
     hydro_pp = _per_pos(hydro_cts)
     hbond_pp = _per_pos(hbond_cts)
+
+    # Side-chain-specific breakdowns (contact_map.py now tags every polar contact
+    # with sc_contact / salt_bridge, and every H-bond with p_is_sidechain).
+    polar_sc_pp   = _per_pos_filtered(
+        polar_cts, lambda c: isinstance(c, dict) and c.get('sc_contact'))
+    saltbridge_pp = _per_pos_filtered(
+        polar_cts, lambda c: isinstance(c, dict) and c.get('salt_bridge'))
+    hbond_sc_pp   = _per_pos_filtered(
+        hbond_cts, lambda h: isinstance(h, dict) and h.get('p_is_sidechain'))
 
     summary: dict = {
         'n_all_contacts':         len(all_cts),
@@ -484,43 +503,58 @@ def _contacts_summary(
         summary[f'contacts_hbond_p{i}'] = hb
 
     hs_total_all = hs_total_polar = hs_total_hydro = hs_total_hbond = 0
+    hs_total_polar_sc = hs_total_hbond_sc = hs_total_saltbridge = 0
 
     for pos in hotspot_positions:
         pi = pos - 1
         if not (0 <= pi < n_pep):
             continue
-        n_all   = all_pp[pi]
-        n_polar = polar_pp[pi]
-        n_hydro = hydro_pp[pi]
-        n_hbond = hbond_pp[pi]
+        n_all      = all_pp[pi]
+        n_polar    = polar_pp[pi]
+        n_hydro    = hydro_pp[pi]
+        n_hbond    = hbond_pp[pi]
+        n_polar_sc = polar_sc_pp[pi]
+        n_hbond_sc = hbond_sc_pp[pi]
+        n_sb       = saltbridge_pp[pi]
 
-        hs_total_all   += n_all
-        hs_total_polar += n_polar
-        hs_total_hydro += n_hydro
-        hs_total_hbond += n_hbond
+        hs_total_all      += n_all
+        hs_total_polar    += n_polar
+        hs_total_hydro    += n_hydro
+        hs_total_hbond    += n_hbond
+        hs_total_polar_sc += n_polar_sc
+        hs_total_hbond_sc += n_hbond_sc
+        hs_total_saltbridge += n_sb
 
-        summary[f'n_contacts_hotspot_p{pos}_all']   = n_all
-        summary[f'n_contacts_hotspot_p{pos}_polar']  = n_polar
-        summary[f'n_contacts_hotspot_p{pos}_hydro']  = n_hydro
-        summary[f'n_contacts_hotspot_p{pos}_hbond']  = n_hbond
+        summary[f'n_contacts_hotspot_p{pos}_all']             = n_all
+        summary[f'n_contacts_hotspot_p{pos}_polar']           = n_polar
+        summary[f'n_contacts_hotspot_p{pos}_polar_sidechain'] = n_polar_sc
+        summary[f'n_contacts_hotspot_p{pos}_polar_bb_only']   = n_polar - n_polar_sc
+        summary[f'n_contacts_hotspot_p{pos}_hydro']           = n_hydro
+        summary[f'n_contacts_hotspot_p{pos}_hbond']           = n_hbond
+        summary[f'n_contacts_hotspot_p{pos}_hbond_sidechain'] = n_hbond_sc
 
-        # Salt bridge: polar contact at this hotspot where binder AA is R or K
-        # polar_cts tuple: (bi, pi, dist, b_atom, p_atom, b_aa, p_aa)
-        sb = [(bi, b_aa) for (bi, ppi, dist, b_at, p_at, b_aa, p_aa) in polar_cts
-              if ppi == pi and b_aa in SALT_BRIDGE_AA]
+        # Salt bridge: oppositely-charged side-chain pair at this hotspot, as
+        # flagged by contact_map.compute_contacts (e.g. peptide Asp/Glu vs
+        # binder Arg/Lys/His). More rigorous than the old "binder AA is R/K"
+        # heuristic — it requires both side-chain charged groups within range.
+        sb = [c for c in polar_cts
+              if isinstance(c, dict) and c.get('salt_bridge') and c['pi'] == pi]
         summary[f'n_saltbridge_hotspot_p{pos}']              = len(sb)
         summary[f'saltbridge_hotspot_p{pos}_binder_resnums'] = str(
-            sorted(set(binder_res[bi].id[1] for bi, _ in sb
-                       if bi < len(binder_res)))
+            sorted(set(binder_res[c['bi']].id[1] for c in sb
+                       if c['bi'] < len(binder_res)))
         )
         summary[f'saltbridge_hotspot_p{pos}_binder_aas']     = str(
-            [b_aa for _, b_aa in sb]
+            sorted(set(c['b_aa'] for c in sb))
         )
 
-    summary['n_contacts_hotspot_total_all']   = hs_total_all
-    summary['n_contacts_hotspot_total_polar']  = hs_total_polar
-    summary['n_contacts_hotspot_total_hydro']  = hs_total_hydro
-    summary['n_contacts_hotspot_total_hbond']  = hs_total_hbond
+    summary['n_contacts_hotspot_total_all']             = hs_total_all
+    summary['n_contacts_hotspot_total_polar']           = hs_total_polar
+    summary['n_contacts_hotspot_total_polar_sidechain'] = hs_total_polar_sc
+    summary['n_contacts_hotspot_total_hydro']           = hs_total_hydro
+    summary['n_contacts_hotspot_total_hbond']           = hs_total_hbond
+    summary['n_contacts_hotspot_total_hbond_sidechain'] = hs_total_hbond_sc
+    summary['n_saltbridge_hotspot_total']               = hs_total_saltbridge
 
     return summary
 
@@ -585,13 +619,23 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'min_heavy_dist': dist,
             'is_hotspot': (pi + 1) in hotspot_set,
         })
-    for (bi, pi, dist, b_at, p_at, b_aa, p_aa) in polar_cts:
+    for c in polar_cts:
+        bi, pi = c['bi'], c['pi']
         polar_rows.append({
             'design': design, 'binder_pos_0idx': bi,
             'binder_resnum': binder_res_list[bi].id[1] if bi < len(binder_res_list) else '',
-            'binder_aa': b_aa, 'binder_atom': b_at,
-            'pep_pos_1idx': pi + 1, 'pep_aa': p_aa, 'pep_atom': p_at,
-            'polar_dist': dist,
+            'binder_aa': c['b_aa'], 'binder_atom': c['b_atom'],
+            'pep_pos_1idx': pi + 1, 'pep_aa': c['p_aa'], 'pep_atom': c['p_atom'],
+            'polar_dist': c['min_dist'],
+            'pep_atom_is_sidechain':   bool(c['p_atom_is_sidechain']),
+            'sidechain_polar_dist':    c['sc_dist'],
+            'binder_sidechain_atom':   c['b_sc_atom'],
+            'pep_sidechain_atom':      c['p_sc_atom'],
+            'sidechain_contact':       bool(c['sc_contact']),
+            'salt_bridge':             bool(c['salt_bridge']),
+            'salt_bridge_dist':        c['sb_dist'],
+            'salt_bridge_binder_atom': c['b_sb_atom'],
+            'salt_bridge_pep_atom':    c['p_sb_atom'],
             'is_hotspot': (pi + 1) in hotspot_set,
         })
     for (bi, pi, dist, b_aa, p_aa) in hydro_cts:
@@ -612,6 +656,8 @@ def contacts_to_rows(design: str, all_cts, polar_cts, hydro_cts, hbond_cts,
             'binder_aa':   hb['b_aa'],  'binder_atom': hb['b_atom'],
             'pep_pos_1idx': hb['pi'] + 1, 'pep_aa': hb['p_aa'],
             'pep_atom':    hb['p_atom'], 'direction': hb['direction'],
+            'binder_atom_is_sidechain': hb.get('b_is_sidechain'),
+            'pep_atom_is_sidechain':    hb.get('p_is_sidechain'),
             'da_dist':     hb['da_dist'], 'dha_angle': hb['dha_angle'],
             'is_hotspot': (hb['pi'] + 1) in hotspot_set,
         })
@@ -1097,7 +1143,10 @@ def main():
     ct_sum_cols = ['n_all_contacts', 'n_polar_contacts', 'n_hydrophobic_contacts',
                    'n_hbonds', 'hbond_available', 'binder_res_in_contact',
                    'n_contacts_hotspot_total_all', 'n_contacts_hotspot_total_polar',
-                   'n_contacts_hotspot_total_hydro', 'n_contacts_hotspot_total_hbond']
+                   'n_contacts_hotspot_total_polar_sidechain',
+                   'n_contacts_hotspot_total_hydro', 'n_contacts_hotspot_total_hbond',
+                   'n_contacts_hotspot_total_hbond_sidechain',
+                   'n_saltbridge_hotspot_total']
     # Per-hotspot position summary columns (sorted by position number)
     ct_hotspot_cols = sorted(
         [c for c in df.columns if 'hotspot_p' in c and not c.startswith('contacts_')],
@@ -1145,7 +1194,10 @@ def main():
                 'cms_peptide_total', 'cms_hotspot_total',
                 'n_all_contacts', 'n_polar_contacts', 'n_hbonds',
                 'n_contacts_hotspot_total_all', 'n_contacts_hotspot_total_polar',
+                'n_contacts_hotspot_total_polar_sidechain',
                 'n_contacts_hotspot_total_hbond',
+                'n_contacts_hotspot_total_hbond_sidechain',
+                'n_saltbridge_hotspot_total',
                 'buns_delta_unsat', 'delta_unsatHbonds', 'surface_hydrophobicity',
                 'interface_K', 'interface_M', 'pass_all_bindcraft']
     anchor = 'ipsae_binder_peptide'

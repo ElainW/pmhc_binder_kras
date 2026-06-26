@@ -7,7 +7,19 @@ Reads pre-split pMHC fold PDBs from split_pmhc_fold_pdbs.py:
 
 Contact definitions:
   all_contacts:         any heavy atom pair < 4.0 Å
-  polar_contacts:       N/O donor-acceptor pair < 4.0 Å
+  polar_contacts:       N/O donor-acceptor pair < 4.0 Å. For each polar contact
+                        we also record whether the peptide atom is side-chain vs
+                        backbone, the side-chain-only closest distance/atoms, and
+                        whether the pair is a salt bridge (opposite-charge
+                        side-chain groups < 4.0 Å). This lets any peptide
+                        position selected via --target_positions be checked for
+                        side-chain-specific engagement (e.g. p5 = Asp/D12
+                        carboxylate) rather than backbone N/O.
+  hbonds:               geometric H-bonds (D–H···A) — computed only when explicit
+                        H atoms are present (FastRelaxed structures). An H-bond is
+                        a stricter subset of a polar contact; side-chain H-bonds
+                        at the target position are reported alongside the
+                        distance-based polar/salt-bridge counts.
   hydrophobic_contacts: peptide residue is hydrophobic AND any heavy atom < 4.0 Å
 
 Plot 1 (per backbone group):
@@ -38,6 +50,10 @@ Usage:
     {relaxed_pdb_dir}/{design}_relaxed.pdb (chain A = binder, chain B = MHC+peptide)
     instead of the pre-split chainA/chainB PDBs. The split_dir is still used
     to determine binder lengths for designs missing a relaxed PDB.
+
+    --target_positions selects which 1-indexed peptide position(s) get the
+    side-chain-specific polar/salt-bridge/H-bond breakdown (default "5", the
+    Asp/D12 neoantigen). E.g. --target_positions 5,8 analyzes p5 and p8.
 """
 
 import os
@@ -59,6 +75,26 @@ HYDROPHOBIC_CONTACT_DIST = 4.0
 
 POLAR_ELEMENTS       = {'N', 'O'}
 HYDROPHOBIC_RESIDUES = {'ALA', 'VAL', 'ILE', 'LEU', 'MET', 'PHE', 'TRP', 'PRO', 'TYR'}
+
+# Peptide/binder backbone atoms — used to distinguish side-chain polar contacts
+# from backbone N/O contacts. A "side-chain polar atom" is any N/O atom whose
+# name is NOT one of these (works for any residue, not just Asp). This lets the
+# user ask, for an arbitrary peptide position, whether a polar contact engages
+# the residue's functional group rather than the backbone amide N / carbonyl O.
+BACKBONE_ATOMS = {'N', 'CA', 'C', 'O', 'OXT'}
+
+# Charged side-chain atoms, by residue, for salt-bridge detection (an acidic
+# carboxylate paired with a basic amine/guanidinium across the interface).
+CHARGED_SIDECHAIN_ATOMS = {
+    'ASP': {'OD1', 'OD2'},
+    'GLU': {'OE1', 'OE2'},
+    'ARG': {'NH1', 'NH2', 'NE'},
+    'LYS': {'NZ'},
+    'HIS': {'ND1', 'NE2'},
+}
+ACIDIC_AA      = {'D', 'E'}
+BASIC_AA       = {'R', 'K', 'H'}
+SALT_BRIDGE_DIST = 4.0   # Å, charged heavy-atom to charged heavy-atom
 
 THREE_TO_ONE = {
     'ALA':'A','ARG':'R','ASN':'N','ASP':'D','CYS':'C',
@@ -154,13 +190,66 @@ def compute_contacts(binder_residues: list, peptide_residues: list):
                 pd_ = np.linalg.norm(bp[:, None, :] - pp[None, :, :], axis=-1)
                 min_p = float(pd_.min())
                 if min_p <= POLAR_CONTACT_DIST:
-                    idx = np.unravel_index(pd_.argmin(), pd_.shape)
-                    polar_contacts.append((
-                        bi, pi, round(min_p, 3),
-                        b_polar[idx[0]][0].get_name().strip(),
-                        p_polar[idx[1]][0].get_name().strip(),
-                        b_aa, p_aa,
-                    ))
+                    idx    = np.unravel_index(pd_.argmin(), pd_.shape)
+                    b_atom = b_polar[idx[0]][0].get_name().strip()
+                    p_atom = p_polar[idx[1]][0].get_name().strip()
+
+                    # Restrict to peptide *side-chain* polar atoms so we can tell
+                    # whether the contact engages the residue's functional group
+                    # (any non-backbone N/O) rather than the backbone N/O. The
+                    # binder atom is left unrestricted: a binder backbone amide
+                    # donating to a peptide side chain is still a side-chain
+                    # polar interaction from the peptide's point of view.
+                    p_sc_cols = [j for j, (a, _) in enumerate(p_polar)
+                                 if a.get_name().strip() not in BACKBONE_ATOMS]
+                    if p_sc_cols:
+                        sc_d       = pd_[:, p_sc_cols]
+                        sc_min     = float(sc_d.min())
+                        sc_i, sc_j = np.unravel_index(sc_d.argmin(), sc_d.shape)
+                        b_sc_atom  = b_polar[sc_i][0].get_name().strip()
+                        p_sc_atom  = p_polar[p_sc_cols[sc_j]][0].get_name().strip()
+                    else:
+                        sc_min, b_sc_atom, p_sc_atom = float('nan'), '', ''
+
+                    # Salt bridge: oppositely charged side-chain groups within
+                    # SALT_BRIDGE_DIST (e.g. peptide Asp/Glu carboxylate vs
+                    # binder Arg/Lys/His, or vice versa). Generic over residue.
+                    b_chg = CHARGED_SIDECHAIN_ATOMS.get(b_res.resname, set())
+                    p_chg = CHARGED_SIDECHAIN_ATOMS.get(p_res.resname, set())
+                    opposite = ((b_aa in ACIDIC_AA and p_aa in BASIC_AA) or
+                                (b_aa in BASIC_AA and p_aa in ACIDIC_AA))
+                    salt_bridge, sb_min, b_sb_atom, p_sb_atom = False, float('nan'), '', ''
+                    if opposite and b_chg and p_chg:
+                        b_sb_idx = [i for i, (a, _) in enumerate(b_polar)
+                                    if a.get_name().strip() in b_chg]
+                        p_sb_idx = [j for j, (a, _) in enumerate(p_polar)
+                                    if a.get_name().strip() in p_chg]
+                        if b_sb_idx and p_sb_idx:
+                            sbd    = pd_[np.ix_(b_sb_idx, p_sb_idx)]
+                            sb_min = float(sbd.min())
+                            if sb_min <= SALT_BRIDGE_DIST:
+                                salt_bridge = True
+                                ii, jj    = np.unravel_index(sbd.argmin(), sbd.shape)
+                                b_sb_atom = b_polar[b_sb_idx[ii]][0].get_name().strip()
+                                p_sb_atom = p_polar[p_sb_idx[jj]][0].get_name().strip()
+
+                    polar_contacts.append({
+                        'bi': bi, 'pi': pi, 'b_aa': b_aa, 'p_aa': p_aa,
+                        'min_dist':           round(min_p, 3),
+                        'b_atom':             b_atom,
+                        'p_atom':             p_atom,
+                        'p_atom_is_sidechain': (p_atom not in BACKBONE_ATOMS),
+                        # peptide side-chain polar contact (binder atom may be backbone)
+                        'sc_dist':            round(sc_min, 3) if sc_min == sc_min else float('nan'),
+                        'b_sc_atom':          b_sc_atom,
+                        'p_sc_atom':          p_sc_atom,
+                        'sc_contact':         bool(sc_min == sc_min and sc_min <= POLAR_CONTACT_DIST),
+                        # salt bridge (both side chains, opposite charge)
+                        'salt_bridge':        salt_bridge,
+                        'sb_dist':            round(sb_min, 3) if sb_min == sb_min else float('nan'),
+                        'b_sb_atom':          b_sb_atom,
+                        'p_sb_atom':          p_sb_atom,
+                    })
 
             if p_res.resname in HYDROPHOBIC_RESIDUES and min_dist <= HYDROPHOBIC_CONTACT_DIST:
                 hydrophobic_contacts.append((bi, pi, round(min_dist, 3), b_aa, p_aa))
@@ -243,14 +332,18 @@ def compute_hbonds(binder_residues: list, peptide_residues: list) -> list:
                     vec_ha = a_coord - h_coord
                     angle  = _angle_deg(vec_dh, vec_ha)
                     if angle >= HBOND_MIN_ANGLE:
+                        b_at = d_atom.get_name().strip()
+                        p_at = a_atom.get_name().strip()
                         hbonds.append({
                             'bi':              bi,
                             'pi':              pi,
                             'b_aa':            b_aa,
                             'p_aa':            p_aa,
                             'direction':       'binder_donor',
-                            'b_atom':          d_atom.get_name().strip(),
-                            'p_atom':          a_atom.get_name().strip(),
+                            'b_atom':          b_at,
+                            'p_atom':          p_at,
+                            'b_is_sidechain':  b_at not in BACKBONE_ATOMS,
+                            'p_is_sidechain':  p_at not in BACKBONE_ATOMS,
                             'da_dist':         round(da_dist, 3),
                             'dha_angle':       round(angle, 1),
                         })
@@ -265,14 +358,18 @@ def compute_hbonds(binder_residues: list, peptide_residues: list) -> list:
                     vec_ha = a_coord - h_coord
                     angle  = _angle_deg(vec_dh, vec_ha)
                     if angle >= HBOND_MIN_ANGLE:
+                        b_at = a_atom.get_name().strip()
+                        p_at = d_atom.get_name().strip()
                         hbonds.append({
                             'bi':              bi,
                             'pi':              pi,
                             'b_aa':            b_aa,
                             'p_aa':            p_aa,
                             'direction':       'peptide_donor',
-                            'b_atom':          a_atom.get_name().strip(),
-                            'p_atom':          d_atom.get_name().strip(),
+                            'b_atom':          b_at,
+                            'p_atom':          p_at,
+                            'b_is_sidechain':  b_at not in BACKBONE_ATOMS,
+                            'p_is_sidechain':  p_at not in BACKBONE_ATOMS,
                             'da_dist':         round(da_dist, 3),
                             'dha_angle':       round(angle, 1),
                         })
@@ -289,11 +386,14 @@ def plot_backbone_group_heatmaps(group_id: str,
                                   n_designs: int,
                                   out_path: str,
                                   mode_label: str = '',
-                                  hbond_counts: np.ndarray | None = None):
+                                  hbond_counts: np.ndarray | None = None,
+                                  target_pos0: list[int] | None = None):
     """
     Plot 1: heatmap panels for one backbone group. Raw contact counts.
     If hbond_counts provided (requires explicit H in PDB), adds a 4th panel.
+    target_pos0: 0-indexed peptide positions to highlight (e.g. [4] for p5).
     """
+    target_pos0 = target_pos0 or []
     max_len    = all_counts.shape[0]
     pep_labels = [f'p{i+1}\n{PEPTIDE_SEQ[i]}' for i in range(PEPTIDE_LEN)]
 
@@ -322,10 +422,11 @@ def plot_backbone_group_heatmaps(group_id: str,
         ax.set_xticklabels(pep_labels, fontsize=9)
         ax.set_xlabel('Peptide position', fontsize=11)
         ax.set_title(title, fontsize=10)
-        ax.axvline(3.5, color='blue', lw=1.5, ls='--', alpha=0.7)
-        ax.axvline(4.5, color='blue', lw=1.5, ls='--', alpha=0.7)
-        ax.text(4, -1.5, 'D12\n(neo)', ha='center', va='top',
-                color='blue', fontsize=8, fontweight='bold')
+        for p0 in target_pos0:
+            ax.axvline(p0 - 0.5, color='blue', lw=1.5, ls='--', alpha=0.7)
+            ax.axvline(p0 + 0.5, color='blue', lw=1.5, ls='--', alpha=0.7)
+            ax.text(p0, -1.5, f'p{p0+1}\n{PEPTIDE_SEQ[p0]}', ha='center', va='top',
+                    color='blue', fontsize=8, fontweight='bold')
 
     axes[0].set_ylabel('Binder residue position (0-indexed)', fontsize=11)
     mode_str = f' [{mode_label}]' if mode_label else ''
@@ -344,11 +445,14 @@ def plot_per_position_counts(all_counts_total: np.ndarray,
                               polar_counts_total: np.ndarray,
                               hydro_counts_total: np.ndarray,
                               n_designs: int,
-                              out_path: str):
+                              out_path: str,
+                              target_pos0: list[int] | None = None):
     """
     Plot 2: Per-peptide-position bar chart of raw contact counts
     summed across all designs. Y-axis = total count, not frequency.
+    target_pos0: 0-indexed peptide positions to highlight.
     """
+    target_pos0 = target_pos0 or []
     all_per_pos   = all_counts_total.sum(axis=0)
     polar_per_pos = polar_counts_total.sum(axis=0)
     hydro_per_pos = hydro_counts_total.sum(axis=0)
@@ -371,8 +475,9 @@ def plot_per_position_counts(all_counts_total: np.ndarray,
         fontsize=12,
     )
     ax.legend(fontsize=9)
-    ax.axvline(3.5, color='blue', lw=1, ls='--', alpha=0.5)
-    ax.axvline(4.5, color='blue', lw=1, ls='--', alpha=0.5)
+    for p0 in target_pos0:
+        ax.axvline(p0 - 0.5, color='blue', lw=1, ls='--', alpha=0.5)
+        ax.axvline(p0 + 0.5, color='blue', lw=1, ls='--', alpha=0.5)
     plt.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches='tight')
     plt.close()
@@ -395,11 +500,30 @@ def main():
                              'instead of the pre-split chainA/chainB PDBs. '
                              'Expected: chain A = binder, chain B = MHC+peptide.')
     parser.add_argument('--out_dir',         required=True)
+    parser.add_argument('--target_positions', default='5',
+                        help='Comma-separated 1-indexed peptide position(s) to '
+                             'analyze for SIDE-CHAIN-specific polar interactions '
+                             '(polar contacts, salt bridges, and — when explicit '
+                             'H atoms are present — H-bonds). Default "5" (the '
+                             f'Asp/D12 neoantigen in {PEPTIDE_SEQ}). Use e.g. '
+                             '"5,8" for multiple positions, or "" to disable.')
     args = parser.parse_args()
+
+    # 1-indexed positions from the user → 0-indexed internally.
+    target_pos1 = [int(p) for p in args.target_positions.split(',') if p.strip()]
+    target_pos0 = [p - 1 for p in target_pos1]
+    for p1, p0 in zip(target_pos1, target_pos0):
+        if not (0 <= p0 < PEPTIDE_LEN):
+            parser.error(f'--target_positions value {p1} out of range '
+                         f'(peptide length {PEPTIDE_LEN})')
 
     use_relaxed = args.relaxed_pdb_dir is not None
     mode_label  = 'FastRelaxed' if use_relaxed else 'pMHC fold (unrelaxed)'
     print(f"Mode: {mode_label}")
+    if target_pos1:
+        tstr = ', '.join(f'p{p1} ({PEPTIDE_SEQ[p0]})'
+                         for p1, p0 in zip(target_pos1, target_pos0))
+        print(f"Side-chain-specific target position(s): {tstr}")
 
     os.makedirs(args.out_dir, exist_ok=True)
 
@@ -519,9 +643,9 @@ def main():
         for (bi, pi, *_) in all_cts:
             if bi < gc['all'].shape[0]:
                 gc['all'][bi, pi] += 1
-        for (bi, pi, *_) in polar_cts:
-            if bi < gc['polar'].shape[0]:
-                gc['polar'][bi, pi] += 1
+        for c in polar_cts:
+            if c['bi'] < gc['polar'].shape[0]:
+                gc['polar'][c['bi'], c['pi']] += 1
         for (bi, pi, *_) in hydro_cts:
             if bi < gc['hydro'].shape[0]:
                 gc['hydro'][bi, pi] += 1
@@ -535,9 +659,9 @@ def main():
         for (bi, pi, *_) in all_cts:
             if bi < global_max_len:
                 global_all[bi, pi] += 1
-        for (bi, pi, *_) in polar_cts:
-            if bi < global_max_len:
-                global_polar[bi, pi] += 1
+        for c in polar_cts:
+            if c['bi'] < global_max_len:
+                global_polar[c['bi'], c['pi']] += 1
         for (bi, pi, *_) in hydro_cts:
             if bi < global_max_len:
                 global_hydro[bi, pi] += 1
@@ -554,12 +678,24 @@ def main():
                 'pep_pos_1idx': pi + 1, 'pep_aa': p_aa,
                 'min_heavy_dist': dist, 'contact_type': 'all',
             })
-        for (bi, pi, dist, b_at, p_at, b_aa, p_aa) in polar_cts:
+        for c in polar_cts:
+            bi = c['bi']
             polar_contact_rows.append({
                 'design': design, 'binder_pos_0idx': bi,
-                'binder_resnum': binder_res[bi].id[1], 'binder_aa': b_aa,
-                'binder_atom': b_at, 'pep_pos_1idx': pi + 1, 'pep_aa': p_aa,
-                'pep_atom': p_at, 'polar_dist': dist, 'contact_type': 'polar',
+                'binder_resnum': binder_res[bi].id[1], 'binder_aa': c['b_aa'],
+                'binder_atom': c['b_atom'], 'pep_pos_1idx': c['pi'] + 1,
+                'pep_aa': c['p_aa'], 'pep_atom': c['p_atom'],
+                'polar_dist': c['min_dist'],
+                'pep_atom_is_sidechain':   bool(c['p_atom_is_sidechain']),
+                'sidechain_polar_dist':    c['sc_dist'],
+                'binder_sidechain_atom':   c['b_sc_atom'],
+                'pep_sidechain_atom':      c['p_sc_atom'],
+                'sidechain_contact':       bool(c['sc_contact']),
+                'salt_bridge':             bool(c['salt_bridge']),
+                'salt_bridge_dist':        c['sb_dist'],
+                'salt_bridge_binder_atom': c['b_sb_atom'],
+                'salt_bridge_pep_atom':    c['p_sb_atom'],
+                'contact_type': 'polar',
             })
         for (bi, pi, dist, b_aa, p_aa) in hydro_cts:
             hydro_contact_rows.append({
@@ -580,39 +716,63 @@ def main():
                 'pep_pos_1idx':  hb['pi'] + 1,
                 'pep_aa':        hb['p_aa'],
                 'pep_atom':      hb['p_atom'],
+                'binder_atom_is_sidechain': hb['b_is_sidechain'],
+                'pep_atom_is_sidechain':    hb['p_is_sidechain'],
                 'direction':     hb['direction'],
                 'da_dist':       hb['da_dist'],
                 'dha_angle':     hb['dha_angle'],
             })
 
-        # Salt bridge detection at p5
-        SALT_BRIDGE_AA = {'R', 'K'}
-        p5_sb = [(bi, pi, d, ba, pa, baa, paa)
-                 for (bi, pi, d, ba, pa, baa, paa) in polar_cts
-                 if pi == 4 and baa in SALT_BRIDGE_AA]
-
-        summary_rows.append({
-            'design':                        design,
-            'backbone_group':                grp,
-            'binder_len':                    n_binder,
-            'binder_seq':                    binder_seq,
-            'n_all_contacts':                len(all_cts),
-            'n_polar_contacts':              len(polar_cts),
-            'n_hydrophobic_contacts':        len(hydro_cts),
-            'n_contacts_p5_all':             sum(1 for (_, pi, *_) in all_cts   if pi == 4),
-            'n_contacts_p5_polar':           sum(1 for (_, pi, *_) in polar_cts if pi == 4),
-            'n_contacts_p5_hydro':           sum(1 for (_, pi, *_) in hydro_cts if pi == 4),
-            'n_hbonds':                       len(hbond_cts),
-            'n_hbonds_p5':                    sum(1 for hb in hbond_cts if hb['pi'] == 4),
-            'hbond_available':                has_H,
-            'n_p5_saltbridge':               len(p5_sb),
-            'p5_sb_binder_resnums':          str(sorted(set(binder_res[bi].id[1] for (bi, *_) in p5_sb))),
-            'p5_sb_binder_aas':              str([baa for (*_, baa, _) in p5_sb]),
-            'binder_res_in_contact':         len(set(bi for (bi, *_) in all_cts)),
+        # Base per-design summary
+        row = {
+            'design':                 design,
+            'backbone_group':         grp,
+            'binder_len':             n_binder,
+            'binder_seq':             binder_seq,
+            'n_all_contacts':         len(all_cts),
+            'n_polar_contacts':       len(polar_cts),
+            'n_hydrophobic_contacts': len(hydro_cts),
+            'n_hbonds':               len(hbond_cts),
+            'hbond_available':        has_H,
+            'binder_res_in_contact':  len(set(bi for (bi, *_) in all_cts)),
             'pep_positions_contacted_all':   sorted(set(pi + 1 for (_, pi, *_) in all_cts)),
-            'pep_positions_contacted_polar': sorted(set(pi + 1 for (_, pi, *_) in polar_cts)),
+            'pep_positions_contacted_polar': sorted(set(c['pi'] + 1 for c in polar_cts)),
             'pep_positions_contacted_hydro': sorted(set(pi + 1 for (_, pi, *_) in hydro_cts)),
-        })
+        }
+
+        # Per-target-position SIDE-CHAIN-specific breakdown. For each requested
+        # peptide position we report (a) polar contacts split into side-chain vs
+        # backbone-only, (b) salt bridges (charged side-chain pairs), and (c)
+        # H-bonds split into side-chain vs total (H-bonds need explicit H atoms,
+        # i.e. relaxed structures). A polar contact is the loosest criterion
+        # (distance only); an H-bond additionally satisfies D–H···A geometry.
+        for p1, p0 in zip(target_pos1, target_pos0):
+            pol_pos = [c for c in polar_cts if c['pi'] == p0]
+            sc_pol  = [c for c in pol_pos if c['sc_contact']]
+            sb_pos  = [c for c in pol_pos if c['salt_bridge']]
+            hb_pos  = [hb for hb in hbond_cts if hb['pi'] == p0]
+            sc_hb   = [hb for hb in hb_pos if hb['p_is_sidechain']]
+            pre = f'p{p1}'
+            row.update({
+                f'{pre}_aa':                          PEPTIDE_SEQ[p0],
+                f'n_contacts_{pre}_all':              sum(1 for (_, pi, *_) in all_cts   if pi == p0),
+                f'n_contacts_{pre}_polar':            len(pol_pos),
+                f'n_contacts_{pre}_polar_sidechain':  len(sc_pol),
+                f'n_contacts_{pre}_polar_bb_only':    len(pol_pos) - len(sc_pol),
+                f'n_contacts_{pre}_hydro':            sum(1 for (_, pi, *_) in hydro_cts if pi == p0),
+                f'n_hbonds_{pre}':                    len(hb_pos),
+                f'n_hbonds_{pre}_sidechain':          len(sc_hb),
+                # name kept as n_p{N}_saltbridge (not n_saltbridge_p{N}) so the
+                # p5 columns match the original schema consumed by
+                # compare_contacts.py.
+                f'n_{pre}_saltbridge':                len(sb_pos),
+                f'{pre}_sc_binder_resnums': str(sorted(set(binder_res[c['bi']].id[1] for c in sc_pol))),
+                f'{pre}_sc_binder_aas':     str(sorted(set(c['b_aa'] for c in sc_pol))),
+                f'{pre}_sb_binder_resnums': str(sorted(set(binder_res[c['bi']].id[1] for c in sb_pos))),
+                f'{pre}_sb_binder_aas':     str(sorted(set(c['b_aa'] for c in sb_pos))),
+            })
+
+        summary_rows.append(row)
         n_processed += 1
 
     print(f"Processed {n_processed}/{len(designs)} designs")
@@ -651,6 +811,7 @@ def main():
             out_path     = out_path,
             mode_label   = mode_label,
             hbond_counts = gc['hbond'] if n_hbond_available > 0 else None,
+            target_pos0  = target_pos0,
         )
 
     # ── Plot 2: Global per-position raw counts ────────────────────────────────
@@ -660,28 +821,44 @@ def main():
         hydro_counts_total = global_hydro,
         n_designs          = n_processed,
         out_path           = os.path.join(args.out_dir, 'contact_per_pep_position_counts.png'),
+        target_pos0        = target_pos0,
     )
 
     # ── Console summary ───────────────────────────────────────────────────────
     summary_df = pd.DataFrame(summary_rows)
     print(f"\nMode: {mode_label} | {n_processed} designs processed")
 
-    print(f"\n── Designs with polar contacts at p5 (D12) ──")
-    p5 = summary_df[summary_df['n_contacts_p5_polar'] > 0][[
-        'design', 'backbone_group', 'n_all_contacts', 'n_polar_contacts',
-        'n_contacts_p5_all', 'n_contacts_p5_polar',
-    ]]
-    print(p5.to_string(index=False))
+    for p1, p0 in zip(target_pos1, target_pos0):
+        aa  = PEPTIDE_SEQ[p0]
+        pre = f'p{p1}'
 
-    print(f"\n── Designs with Arg/Lys salt bridge at p5 ──")
-    sb = summary_df[summary_df['n_p5_saltbridge'] > 0][[
-        'design', 'backbone_group', 'n_p5_saltbridge',
-        'p5_sb_binder_resnums', 'p5_sb_binder_aas',
-    ]]
-    if len(sb):
-        print(sb.to_string(index=False))
-    else:
-        print("  (none)")
+        print(f"\n── Designs with {aa} side-chain polar contacts at p{p1} ──")
+        sc = summary_df[summary_df[f'n_contacts_{pre}_polar_sidechain'] > 0][[
+            'design', 'backbone_group', 'n_all_contacts', 'n_polar_contacts',
+            f'n_contacts_{pre}_all', f'n_contacts_{pre}_polar',
+            f'n_contacts_{pre}_polar_sidechain', f'n_contacts_{pre}_polar_bb_only',
+            f'n_hbonds_{pre}_sidechain',
+        ]]
+        if len(sc):
+            print(sc.to_string(index=False))
+        else:
+            print("  (none)")
+
+        bb_only = summary_df[(summary_df[f'n_contacts_{pre}_polar'] > 0)
+                             & (summary_df[f'n_contacts_{pre}_polar_sidechain'] == 0)]
+        if len(bb_only):
+            print(f"\n  NOTE: {len(bb_only)} design(s) have polar contacts at p{p1} "
+                  f"that are backbone-only (no {aa} side-chain engagement) — excluded above.")
+
+        print(f"\n── Designs with a salt bridge at p{p1} ({aa}) ──")
+        sb = summary_df[summary_df[f'n_{pre}_saltbridge'] > 0][[
+            'design', 'backbone_group', f'n_{pre}_saltbridge',
+            f'{pre}_sb_binder_resnums', f'{pre}_sb_binder_aas',
+        ]]
+        if len(sb):
+            print(sb.to_string(index=False))
+        else:
+            print("  (none)")
 
 
 if __name__ == '__main__':
